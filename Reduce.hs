@@ -37,7 +37,7 @@ powerFun =
             (EApp C (EApp C (EVar C "power") (EVar C "x")) (EApp C (EApp C (EPrimFun C PAdd) (ELit C $ LFloat $ -1.0)) (EVar C "n"))))
   )
 
-reduceExp = powerFun $ EApp C (EApp C (EVar C "power") (ELit C $ LFloat 2.0)) (ELit C $ LFloat 3.0)
+reduceExp = powerFun $ EApp C (EApp C (EVar C "power") (ELit C $ LFloat 2.0)) (ELit C $ LFloat 4.0)
 
 lit0 = ELit C $ LFloat 0.0
 lit1 = ELit C $ LFloat 1.0
@@ -92,6 +92,7 @@ result6 = ELit C (LFloat 2.0)
 result7 = ELit C (LFloat 1.0)
 result8 = ELit C (LFloat 1.0)
 result9 = ELit C (LFloat 2.0)
+resultPower = ELit C (LFloat 16.0)
 
 tests =
   [ (test,result)
@@ -104,6 +105,7 @@ tests =
   , (test7,result7)
   , (test8,result8)
   , (test9,result9)
+  , (testPower,resultPower)
   ]
 
 ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
