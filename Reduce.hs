@@ -39,6 +39,9 @@ powerFun =
 
 reduceExp = powerFun $ EApp C (EApp C (EVar C "power") (ELit C $ LFloat 2.0)) (ELit C $ LFloat 4.0)
 
+lit0R = ELit R $ LFloat 0.0
+lit1R = ELit R $ LFloat 1.0
+
 lit0 = ELit C $ LFloat 0.0
 lit1 = ELit C $ LFloat 1.0
 lit2 = ELit C $ LFloat 2.0
@@ -69,6 +72,11 @@ letFun1 = ELet C "f" (ELam C "x" $ ELam C "y" $ ifZero (EVar C "x") (EVar C "y")
 
 reduceIfZero = ifZero lit0 lit1 lit2
 
+primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
+specFun1 = ELam R "x" $ ELam C "y" $ ELam R "z" $ primAddR (EVar R "x") $ primAddR (EVar C "y") (EVar R "z")
+letSpecFun1 = ELet C "f" specFun1 $ EApp R (EApp C (EApp R (EVar C "f") lit1R) lit2) lit0R
+
+
 test = reduce mempty mempty reduceLamId
 test1 = reduce mempty mempty reduceLamFun
 test2 = reduce mempty mempty reduceLamMix1
@@ -79,6 +87,7 @@ test6 = reduce mempty mempty mul
 test7 = reduce mempty mempty letFun0
 test8 = reduce mempty mempty reduceIfZero
 test9 = reduce mempty mempty letFun1
+test10 = reduce mempty mempty letSpecFun1
 
 testPower = reduce mempty mempty reduceExp
 
@@ -117,12 +126,14 @@ addEnv env n x = Map.insert n x env
 reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> e
   -- question: who should reduce the stack arguments?
+  --  answer: EApp
 
   EPrimFun C PAdd | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a + b
   EPrimFun C PMul | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a * b
 
---  EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> if v == 0 then reduce env (drop 3 stack) th else reduce env (drop 3 stack) el
   EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> if v == 0 then th else el
+
+  EPrimFun R _ -> e
 
   EVar R n -> e
   EVar C n -> case Map.lookup n env of
@@ -130,10 +141,10 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
     Just v -> reduce env stack v
 
   ELam C n x -> reduce (addEnv env n (head stack)) (tail stack) x
-  EApp C f a -> reduce env (reduce env stack a:stack) f
-
   ELam R n x -> ELam R n $ reduce env (tail stack) x
-  EApp R f a -> EApp R (reduce env (a:stack) f) (reduce env stack a)
+
+  EApp C f a -> reduce env (reduce env stack a:stack) f
+  EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
 
   ELet C n a b -> reduce (addEnv env n a) stack b
   ELet R n a b -> ELet R n (reduce env stack a) (reduce env stack b)
@@ -142,5 +153,7 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
 
 {-
   TODO:
+    annotate RHS in let expressions
+    specialize add x@c y@r
     how to specialise "power"?
 -}
