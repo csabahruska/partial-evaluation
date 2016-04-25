@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Reduce where
 
@@ -30,7 +31,7 @@ data Exp
   | ELet      Stage EName Exp Exp
   -- specialization
   | EBody     Stage Exp
-  | ESpec     EName Exp
+  | ESpec     EName Int Exp
   deriving (Show,Eq,Ord)
 
 powerFun =
@@ -77,7 +78,7 @@ reduceIfZero = ifZero lit0 lit1 lit2
 
 -------- specialization test
 primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
-specFun0 = ESpec "f" $ ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
+specFun0 = ESpec "f" 2 $ ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
 letSpecFun0 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") lit1R) lit2
 --------
 -- TODO
@@ -136,6 +137,17 @@ type Env = Map EName Exp
 --TODO(improve scoping): addEnv env n x = Map.insertWith (\new old -> error $ "addEnv - name clash: " ++ n ++ " " ++ show (new,old)) n x env
 addEnv env n x = Map.insert n x env
 
+stage :: Exp -> Stage
+stage = \case
+  ELit      s _ -> s
+  EPrimFun  s _ -> s
+  EVar      s _ -> s
+  EApp      s _ _ -> s
+  ELam      s _ _ -> s
+  ELet      s _ _ _ -> s
+  EBody     s _ -> s
+  ESpec     {} -> error "stage - ESpec"
+
 -- HINT: the stack items are reduced expressions
 
 reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
@@ -163,7 +175,8 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
     -- specialise function with key: name + args + body
 
   -- TODO: collet relevant (C) arguments from stack
-  ESpec n e -> let e' = reduce env stack e in trace ("\n<SPECIALIZED> " ++ n ++ " = " ++ show e' ++ "\n<STACK> " ++ show (take 2 stack) ++ "\n") (EVar R $ n ++ "_spec")
+  ESpec n i e -> let e' = reduce env stack e in trace ("\n<SPECIALIZED> " ++ n ++ " = " ++ show e' ++ "\n<STACK> " ++ show args ++ "\n") (EVar R $ n ++ "_spec")
+    where args = [if stage a == C then Just a else Nothing | a <- take i stack]
 
   EApp C f a -> reduce env (reduce env stack a:stack) f
   EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
