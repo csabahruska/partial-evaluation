@@ -27,6 +27,7 @@ data Exp
   | EVar      Stage EName
   | EApp      Stage Exp Exp
   | ELam      Stage EName Exp
+  | EBody     Stage Exp
   | ELet      Stage EName Exp Exp
   deriving (Show,Eq,Ord)
 
@@ -73,9 +74,16 @@ letFun1 = ELet C "f" (ELam C "x" $ ELam C "y" $ ifZero (EVar C "x") (EVar C "y")
 reduceIfZero = ifZero lit0 lit1 lit2
 
 primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
+specFun0 = ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
+letSpecFun0 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") lit1R) lit2
+-- TODO
+{-
+  the generic function "f" should not be used in the residual; should be replaced with the specialised functions in the same scope
+-}
+{-
 specFun1 = ELam R "x" $ ELam C "y" $ ELam R "z" $ primAddR (EVar R "x") $ primAddR (EVar C "y") (EVar R "z")
 letSpecFun1 = ELet C "f" specFun1 $ EApp R (EApp C (EApp R (EVar C "f") lit1R) lit2) lit0R
-
+-}
 
 test = reduce mempty mempty reduceLamId
 test1 = reduce mempty mempty reduceLamFun
@@ -87,7 +95,7 @@ test6 = reduce mempty mempty mul
 test7 = reduce mempty mempty letFun0
 test8 = reduce mempty mempty reduceIfZero
 test9 = reduce mempty mempty letFun1
-test10 = reduce mempty mempty letSpecFun1
+test10 = reduce mempty mempty letSpecFun0
 
 testPower = reduce mempty mempty reduceExp
 
@@ -121,6 +129,7 @@ ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
 
 type Env = Map EName Exp
 
+--TODO(improve scoping): addEnv env n x = Map.insertWith (\new old -> error $ "addEnv - name clash: " ++ n ++ " " ++ show (new,old)) n x env
 addEnv env n x = Map.insert n x env
 
 reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
@@ -142,6 +151,9 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
 
   ELam C n x -> reduce (addEnv env n (head stack)) (tail stack) x
   ELam R n x -> ELam R n $ reduce env (tail stack) x
+
+  EBody C a -> reduce env stack a
+  EBody R a -> EBody R $ reduce env stack a
 
   EApp C f a -> reduce env (reduce env stack a:stack) f
   EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
