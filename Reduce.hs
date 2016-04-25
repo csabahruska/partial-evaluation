@@ -175,8 +175,11 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
     -- specialise function with key: name + args + body
 
   -- TODO: collet relevant (C) arguments from stack
-  ESpec n i e -> let e' = reduce env stack e in trace ("\n<SPECIALIZED> " ++ n ++ " = " ++ show e' ++ "\n<STACK> " ++ show args ++ "\n") (EVar R $ n ++ "_spec")
+  ESpec n i e -> trace ("\n<SPECIALIZED> " ++ n ++ "_spec = " ++ show e' ++ "\n<STACK> " ++ show args ++ "\n") result
     where args = [if stage a == C then Just a else Nothing | a <- take i stack]
+          n' = n ++ "_spec"
+          e' = reduce env stack e -- TODO: insert to original ELet as a specialized case
+          result = EVar R n'
 
   EApp C f a -> reduce env (reduce env stack a:stack) f
   EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
