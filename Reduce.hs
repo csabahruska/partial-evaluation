@@ -7,7 +7,9 @@ module Reduce where
 import Debug.Trace
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Control.Monad.State
+import Control.Monad.Writer
+import Control.Monad.Reader
+import Data.Foldable (foldrM)
 
 type EName = String
 
@@ -34,7 +36,8 @@ data Exp
   | EBody     Stage Exp
   -- during reduction
   | ESpec     EName Int Exp
-  | ESpecFun  EName Exp
+  | ESpecLet  EName Exp
+  | ESpecFun  EName [Maybe Exp] Exp -- original name, spec args, spec function
   deriving (Show,Eq,Ord)
 
 powerFun =
@@ -52,6 +55,7 @@ lit1R = ELit R $ LFloat 1.0
 lit0 = ELit C $ LFloat 0.0
 lit1 = ELit C $ LFloat 1.0
 lit2 = ELit C $ LFloat 2.0
+lit3 = ELit C $ LFloat 3.0
 
 ifZero v t e = EApp C (EApp C (EApp C (EPrimFun C PIfZero) v) t) e
 
@@ -93,6 +97,7 @@ powerFunR =
   )
 
 powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit1
+powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit3
 --------
 -- TODO
 {-
@@ -112,6 +117,7 @@ test9 = runReduce letFun1
 test10 = runReduce letSpecFun0
 test11 = runReduce letSpecFun1
 test12 = runReduce powerExpR
+test13 = runReduce powerExpR1
 
 testPower = runReduce reduceExp
 
@@ -132,6 +138,11 @@ result11 =
   (ELet R "f1" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0)))))
   (EApp R (EVar R "f1") (EApp R (EVar R "f0") (ELit R (LFloat 1.0)))))
 
+result12 =
+   ELet R "power0" (ELam R "x" (EBody R (ELit C (LFloat 1.0))))
+  (ELet R "power1" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PMul) (EVar R "x")) (EApp R (EVar R "power0") (EVar R "x")))))
+  (EApp R (EVar R "power1") (ELit C (LFloat 2.0))))
+
 tests =
   [ (test,result)
   , (test1,result1)
@@ -146,6 +157,7 @@ tests =
   , (testPower,resultPower)
   , (test10,result10)
   , (test11,result11)
+  , (test12,result12)
   ]
 
 ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
@@ -167,97 +179,97 @@ stage = \case
   ESpec     {} -> error "stage - ESpec"
 
 -- HINT: the stack items are reduced expressions
+type SpecW = Writer (Map (EName,[Maybe Exp]) Exp)
 
-insertSpec :: Exp -> EvalM Exp
-insertSpec x = case {-trace (show x)-} x of
+collectSpec :: Exp -> SpecW Exp
+collectSpec x = case x of
+  EApp      s a b -> EApp s <$> collectSpec a <*> collectSpec b
+  ELam      s n a -> ELam s n <$> collectSpec a
+  ELet      s n a b -> ELet s n <$> collectSpec a <*> collectSpec b
+  EBody     s a -> EBody s <$> collectSpec a
+  ESpec     {} -> error "collectSpec - ESpec"
+  ESpecLet  n b -> ESpecLet n <$> collectSpec b
+  ESpecFun  n a f -> collectSpec f >> x <$ tell (Map.singleton (n,a) f)
+  e -> return e
+
+type SpecR = Reader (Map EName (Map [Maybe Exp] (EName,Exp)))
+
+insertSpec :: Exp -> SpecR Exp
+insertSpec x = case x of
   EApp      s a b -> EApp s <$> insertSpec a <*> insertSpec b
   ELam      s n a -> ELam s n <$> insertSpec a
   ELet      s n a b -> ELet s n <$> insertSpec a <*> insertSpec b
   EBody     s a -> EBody s <$> insertSpec a
   ESpec     {} -> error "insertSpec - ESpec"
-  ESpecFun  n b -> do
-                    m <- gets (Map.lookup n)
+  ESpecLet  n b -> do
+                    m <- reader (Map.lookup n)
                     case m of
-                      Nothing -> error $ "insertSpec - ESpecFun: missing function: " ++ n
-                      Just sm -> foldr (\(n,a) e -> ELet R n a e) <$> insertSpec b <*> pure (Map.elems sm)
+                      Nothing -> error $ "insertSpec - ESpecLet: missing function: " ++ n
+                      Just sm -> do
+                        b' <- insertSpec b
+                        foldrM (\(n,a) e -> ELet R n <$> insertSpec a <*> insertSpec e) b' (Map.elems sm)
+  ESpecFun  n a _ -> do
+                    m <- reader (Map.lookup n)
+                    case m of
+                      Nothing -> error $ "insertSpec - ESpecLet: missing function: " ++ n
+                      Just sm -> case Map.lookup a sm of
+                        Nothing -> error $ "insertSpec - ESpecLet: missing spec function: " ++ n ++ " args: " ++ show a
+                        Just (sn,_) -> return $ EVar R sn
   e -> return e
 
-type EvalM = State (Map EName (Map [Maybe Exp] (EName,Exp)))
-
 runReduce :: Exp -> Exp
-runReduce a = evalState (reduce mempty mempty a >>= insertSpec) mempty
+runReduce exp = runReader (insertSpec rExp) m
+  where
+    rExp = reduce mempty mempty exp
+    specMap = execWriter $ collectSpec rExp
+    m = go (Map.toList specMap) mempty
+    go [] m = m
+    go (((n,a),f):l) m = go l $ case Map.lookup n m of
+      Nothing -> Map.insert n (Map.singleton a (n ++ "0",f)) m
+      Just sm -> case Map.lookup a sm of
+        Nothing -> Map.adjust (\sm -> Map.insert a (n ++ show (Map.size sm),f) sm) n m
+        Just _  -> m
 
-runReduce' a = runState (reduce mempty mempty a >>= insertSpec) mempty
-
-reduce :: Env -> [Exp] -> Exp -> EvalM Exp
+reduce :: Env -> [Exp] -> Exp -> Exp
 reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
-  ELit {} -> return e
+  ELit {} -> e
   -- question: who should reduce the stack arguments?
   --  answer: EApp
 
-  EPrimFun C PAdd | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> return $ ELit C $ LFloat $ a + b
-  EPrimFun C PMul | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> return $ ELit C $ LFloat $ a * b
+  EPrimFun C PAdd | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a + b
+  EPrimFun C PMul | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a * b
 
-  EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> return $ if v == 0 then th else el
+  EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> if v == 0 then th else el
 
-  EPrimFun R _ -> return e
+  EPrimFun R _ -> e
 
-  EVar R n -> return e
+  EVar R n -> e
   EVar C n -> case Map.lookup n env of
     Nothing -> error $ "missing variable: " ++ n
     Just v -> reduce env stack v
 
   ELam C n x -> reduce (addEnv env n (head stack)) (tail stack) x
-  ELam R n x -> ELam R n <$> reduce env (tail stack) x
+  ELam R n x -> ELam R n $ reduce env (tail stack) x
 
   EBody C a -> reduce env stack a
-  EBody R a -> EBody R <$> reduce env stack a
+  EBody R a -> EBody R $ reduce env stack a
 
-  -- specialise function with key: name + args + body
-  ESpec n i e -> do
-                  m <- gets id
-                  let args = [if stage a == C then Just a else Nothing | a <- take i stack]
-                  (n',m') <- case Map.lookup n m of
-                    Just sm -> case Map.lookup args sm of
-                      Just (fn,_) -> return (fn,m)
-                      Nothing -> do
-                                  e' <- reduce env stack e
-                                  m <- gets id
-                                  let fn = n ++ show (Map.size m)
-                                  return (fn,Map.adjust (\sm -> Map.insertWith (\_ _ -> error $ "args conflict") args (fn,e') sm) n m)
-                    Nothing -> do
-                                  e' <- reduce env stack e
-                                  m <- gets id
-                                  let fn = {-trace ("\n<SPEC> " ++ show (take 3 $ Map.keys m2) ++ "\n") $ -}n ++ show (Map.size m)
-                                  return (fn,Map.insertWith (\_ _ -> error "name conflict") n (Map.singleton args (fn,e')) m)
-                  put m'
-                  return $ EVar R n'
+  EApp C f a -> reduce env (a':stack) f where a' = reduce env stack a
+  EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
 
-  EApp C f a -> do
-                  a' <- reduce env stack a
-                  reduce env (a':stack) f
-  EApp R f a -> do
-                  a' <- reduce env stack a
-                  EApp R <$> (reduce env (a':stack) f) <*> pure a'
-
-  ELet C n a b -> do
-    let go i l x = case x of
+  ELet C n a b ->
+    case arity > 0 && needSpec of
+      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) stack b
+      False -> reduce (addEnv env n a) stack b
+   where
+        go i l x = case x of
           EBody s _ -> (i,l)
           ELam s _ x -> go (i+1) (s:l) x
           _ | i == 0 -> (i,l)
             | otherwise -> error $ "invalid function: " ++ show a
         (arity,stages) = go 0 [] a
         needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
-    case arity > 0 && needSpec of
-      True  -> ESpecFun n <$> reduce (addEnv env n (ESpec n arity a)) stack b
-      False -> reduce (addEnv env n a) stack b
-  ELet R n a b -> ELet R n <$> (reduce env stack a) <*> (reduce env stack b)
+  ELet R n a b -> ELet R n (reduce env stack a) (reduce env stack b)
 
+  ESpec n i e -> ESpecFun n args (reduce env stack e) where args = [if stage a == C then Just a else Nothing | a <- take i stack]
   _ -> error $ "can not reduce: " ++ show e
-
-{-
-  TODO:
-    annotate RHS in let expressions
-    specialize add x@c y@r
-    how to specialise "power"?
--}
