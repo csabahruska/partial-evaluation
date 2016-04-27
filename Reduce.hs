@@ -86,21 +86,17 @@ letSpecFun0 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") lit1R) lit2
 letSpecFun1 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") (EApp C (EApp R (EVar C "f") lit1R) lit1)) lit2
 
 powerFunR =
-  ELet C "power" (ELam R "x" $ ELam C "n" $ EBody C $ ifZero (EVar C "n")
+  ELet C "power" (ELam R "x" $ ELam C "n" $ EBody R $ ifZero (EVar C "n")
     (ELit C $ LFloat 1.0)
     (EApp R (EApp R (EPrimFun R PMul) (EVar R "x"))
             (EApp C (EApp R (EVar C "power") (EVar R "x")) (EApp C (EApp C (EPrimFun C PAdd) (ELit C $ LFloat $ -1.0)) (EVar C "n"))))
   )
 
-powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") (ELit C $ LFloat 2.0)) (ELit C $ LFloat 4.0)
+powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit1
 --------
 -- TODO
 {-
   the generic function "f" should not be used in the residual; should be replaced with the specialised functions in the same scope
--}
-{-
-specFun1 = ELam R "x" $ ELam C "y" $ ELam R "z" $ primAddR (EVar R "x") $ primAddR (EVar C "y") (EVar R "z")
-letSpecFun1 = ELet C "f" specFun1 $ EApp R (EApp C (EApp R (EVar C "f") lit1R) lit2) lit0R
 -}
 
 test = runReduce reduceLamId
@@ -115,6 +111,7 @@ test8 = runReduce reduceIfZero
 test9 = runReduce letFun1
 test10 = runReduce letSpecFun0
 test11 = runReduce letSpecFun1
+test12 = runReduce powerExpR
 
 testPower = runReduce reduceExp
 
@@ -225,14 +222,14 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
                       Just (fn,_) -> return (fn,m)
                       Nothing -> do
                                   e' <- reduce env stack e
-                                  --m <- gets id
+                                  m <- gets id
                                   let fn = n ++ show (Map.size m)
-                                  return (fn,Map.adjust (\sm -> Map.insert args (fn,e') sm) n m)
+                                  return (fn,Map.adjust (\sm -> Map.insertWith (\_ _ -> error $ "args conflict") args (fn,e') sm) n m)
                     Nothing -> do
                                   e' <- reduce env stack e
-                                  --m <- gets id
-                                  let fn = n ++ show (Map.size m)
-                                  return (fn,Map.insert n (Map.singleton args (fn,e')) m)
+                                  m <- gets id
+                                  let fn = {-trace ("\n<SPEC> " ++ show (take 3 $ Map.keys m2) ++ "\n") $ -}n ++ show (Map.size m)
+                                  return (fn,Map.insertWith (\_ _ -> error "name conflict") n (Map.singleton args (fn,e')) m)
                   put m'
                   return $ EVar R n'
 
