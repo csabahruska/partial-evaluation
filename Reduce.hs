@@ -34,7 +34,7 @@ data Exp
   | ELet      Stage EName Exp Exp
   -- specialization
   | EBody     Stage Exp
-  -- during reduction
+  -- inserted during reduction
   | ESpec     EName Int Exp
   | ESpecLet  EName Exp
   | ESpecFun  EName [Maybe Exp] Exp -- original name, spec args, spec function
@@ -88,6 +88,9 @@ primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
 specFun0 = ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
 letSpecFun0 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") lit1R) lit2
 letSpecFun1 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") (EApp C (EApp R (EVar C "f") lit1R) lit1)) lit2
+{-
+  the generic function "f" should not be used in the residual; should be replaced with the specialised functions in the same scope
+-}
 
 powerFunR =
   ELet C "power" (ELam R "x" $ ELam C "n" $ EBody R $ ifZero (EVar C "n")
@@ -97,12 +100,7 @@ powerFunR =
   )
 
 powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit1
-powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit3
---------
--- TODO
-{-
-  the generic function "f" should not be used in the residual; should be replaced with the specialised functions in the same scope
--}
+powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit2
 
 test = runReduce reduceLamId
 test1 = runReduce reduceLamFun
@@ -211,9 +209,9 @@ insertSpec x = case x of
   ESpecFun  n a _ -> do
                     m <- reader (Map.lookup n)
                     case m of
-                      Nothing -> error $ "insertSpec - ESpecLet: missing function: " ++ n
+                      Nothing -> error $ "insertSpec - ESpecFun: missing function: " ++ n
                       Just sm -> case Map.lookup a sm of
-                        Nothing -> error $ "insertSpec - ESpecLet: missing spec function: " ++ n ++ " args: " ++ show a
+                        Nothing -> error $ "insertSpec - ESpecFun: missing spec function: " ++ n ++ " args: " ++ show a
                         Just (sn,_) -> return $ EVar R sn
   e -> return e
 
@@ -238,7 +236,6 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
 
   EPrimFun C PAdd | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a + b
   EPrimFun C PMul | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a * b
-
   EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> if v == 0 then th else el
 
   EPrimFun R _ -> e
@@ -257,6 +254,7 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
   EApp C f a -> reduce env (a':stack) f where a' = reduce env stack a
   EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
 
+  ELet R n a b -> ELet R n (reduce env stack a) (reduce env stack b)
   ELet C n a b ->
     case arity > 0 && needSpec of
       True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) stack b
@@ -269,7 +267,8 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
             | otherwise -> error $ "invalid function: " ++ show a
         (arity,stages) = go 0 [] a
         needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
-  ELet R n a b -> ELet R n (reduce env stack a) (reduce env stack b)
 
+  -- inserted by ELet C
   ESpec n i e -> ESpecFun n args (reduce env stack e) where args = [if stage a == C then Just a else Nothing | a <- take i stack]
+
   _ -> error $ "can not reduce: " ++ show e
