@@ -99,7 +99,15 @@ powerFunR =
             (EApp C (EApp R (EVar C "power") (EVar R "x")) (EApp C (EApp C (EPrimFun C PAdd) (ELit C $ LFloat $ -1.0)) (EVar C "n"))))
   )
 
+powerFunR' =
+  ELet C "power" (ELam C "n" $ ELam R "x" $ EBody R $ ifZero (EVar C "n")
+    (ELit C $ LFloat 1.0)
+    (EApp R (EApp R (EPrimFun R PMul) (EVar R "x"))
+            (EApp R (EApp C (EVar C "power") (EApp C (EApp C (EPrimFun C PAdd) (ELit C $ LFloat $ -1.0)) (EVar C "n"))) (EVar R "x")))
+  )
+
 powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit1
+powerExpR' = powerFunR' $ EApp R (EApp C (EVar C "power") lit1) lit2
 powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit2
 
 test = runReduce reduceLamId
@@ -156,6 +164,7 @@ tests =
   , (test10,result10)
   , (test11,result11)
   , (test12,result12)
+  , (runReduce powerExpR',result12)
   ]
 
 ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
@@ -272,3 +281,10 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
   ESpec n i e -> ESpecFun n args (reduce env stack e) where args = [if stage a == C then Just a else Nothing | a <- take i stack]
 
   _ -> error $ "can not reduce: " ++ show e
+
+{-
+  pattern match:
+    case x of
+      Tag a b c ... -- Contructor Tag + variables
+  -- evaluation of a constructor alternative is like in Lam + App
+-}
