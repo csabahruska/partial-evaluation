@@ -12,6 +12,7 @@ import Control.Monad.Reader
 import Data.Foldable (foldrM)
 
 type EName = String
+type ConName = String
 
 data Stage = R | C deriving (Show,Eq,Ord)
 
@@ -24,6 +25,8 @@ data PrimFun
   | PMul
   | PIfZero
   deriving (Show,Eq,Ord)
+
+data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
 
 data Exp
   = ELit      Stage Lit
@@ -38,6 +41,9 @@ data Exp
   | ESpec     EName Int Exp
   | ESpecLet  EName Exp
   | ESpecFun  EName [Maybe Exp] Exp -- original name, spec args, spec function
+  -- pattern match
+  | ECon      Stage ConName [Exp]
+  | ECase     Stage Exp [Pat]
   deriving (Show,Eq,Ord)
 
 powerFun =
@@ -197,7 +203,10 @@ collectSpec x = case x of
   ESpec     {} -> error "collectSpec - ESpec"
   ESpecLet  n b -> ESpecLet n <$> collectSpec b
   ESpecFun  n a f -> collectSpec f >> x <$ tell (Map.singleton (n,a) f)
-  e -> return e
+  ELit      {} -> return x
+  EPrimFun  {} -> return x
+  EVar      {} -> return x
+  e -> error $ "collectSpec: " ++ show e
 
 type SpecR = Reader (Map EName (Map [Maybe Exp] (EName,Exp)))
 
@@ -222,7 +231,10 @@ insertSpec x = case x of
                       Just sm -> case Map.lookup a sm of
                         Nothing -> error $ "insertSpec - ESpecFun: missing spec function: " ++ n ++ " args: " ++ show a
                         Just (sn,_) -> return $ EVar R sn
-  e -> return e
+  ELit      {} -> return x
+  EPrimFun  {} -> return x
+  EVar      {} -> return x
+  e -> error $ "insertSpec: " ++ show e
 
 runReduce :: Exp -> Exp
 runReduce exp = runReader (insertSpec rExp) m
@@ -287,4 +299,12 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
     case x of
       Tag a b c ... -- Contructor Tag + variables
   -- evaluation of a constructor alternative is like in Lam + App
+
+  example:
+    data Maybe a = Nothing | Just a
+
+    let x = Just 1
+    in case x of
+        Nothing -> 0
+        Just i  -> i
 -}
