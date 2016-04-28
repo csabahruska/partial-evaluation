@@ -9,7 +9,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Monad.Writer
 import Control.Monad.Reader
-import Data.Foldable (foldrM)
+import Data.Foldable (foldrM,find)
 
 type EName = String
 type ConName = String
@@ -89,6 +89,7 @@ letFun1 = ELet C "f" (ELam C "x" $ ELam C "y" $ EBody C $ ifZero (EVar C "x") (E
 
 reduceIfZero = ifZero lit0 lit1 lit2
 
+primMulC x y = EApp C (EApp C (EPrimFun C PMul) x) y
 -------- specialization test
 primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
 specFun0 = ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
@@ -115,6 +116,10 @@ powerFunR' =
 powerExpR = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit1
 powerExpR' = powerFunR' $ EApp R (EApp C (EVar C "power") lit1) lit2
 powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit2
+
+-------- pattern match test
+case0 = ELet C "x" (ECon C "Just" [lit2]) $ ECase C (EVar C "x") [Pat "Just" ["a"] (EVar C "a")]
+case1 = ELet R "x" (ECon R "Just" [lit2]) $ ECase R (EVar R "x") [Pat "Just" ["a"] (EVar R "a")]
 
 test = runReduce reduceLamId
 test1 = runReduce reduceLamFun
@@ -190,32 +195,35 @@ stage = \case
   ELet      s _ _ _ -> s
   EBody     s _ -> s
   ESpec     {} -> error "stage - ESpec"
+  e -> error $ "stage: " ++ show e
 
 -- HINT: the stack items are reduced expressions
 type SpecW = Writer (Map (EName,[Maybe Exp]) Exp)
 
 collectSpec :: Exp -> SpecW Exp
 collectSpec x = case x of
-  EApp      s a b -> EApp s <$> collectSpec a <*> collectSpec b
-  ELam      s n a -> ELam s n <$> collectSpec a
-  ELet      s n a b -> ELet s n <$> collectSpec a <*> collectSpec b
-  EBody     s a -> EBody s <$> collectSpec a
+  EApp      R a b -> EApp R <$> collectSpec a <*> collectSpec b
+  ELam      R n a -> ELam R n <$> collectSpec a
+  ELet      R n a b -> ELet R n <$> collectSpec a <*> collectSpec b
+  EBody     R a -> EBody R <$> collectSpec a
   ESpec     {} -> error "collectSpec - ESpec"
   ESpecLet  n b -> ESpecLet n <$> collectSpec b
   ESpecFun  n a f -> collectSpec f >> x <$ tell (Map.singleton (n,a) f)
   ELit      {} -> return x
   EPrimFun  {} -> return x
   EVar      {} -> return x
+  ECon      R n l -> ECon R n <$> mapM collectSpec l
+  ECase     R a l -> ECase R <$> collectSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> collectSpec b) l
   e -> error $ "collectSpec: " ++ show e
 
 type SpecR = Reader (Map EName (Map [Maybe Exp] (EName,Exp)))
 
 insertSpec :: Exp -> SpecR Exp
 insertSpec x = case x of
-  EApp      s a b -> EApp s <$> insertSpec a <*> insertSpec b
-  ELam      s n a -> ELam s n <$> insertSpec a
-  ELet      s n a b -> ELet s n <$> insertSpec a <*> insertSpec b
-  EBody     s a -> EBody s <$> insertSpec a
+  EApp      R a b -> EApp R <$> insertSpec a <*> insertSpec b
+  ELam      R n a -> ELam R n <$> insertSpec a
+  ELet      R n a b -> ELet R n <$> insertSpec a <*> insertSpec b
+  EBody     R a -> EBody R <$> insertSpec a
   ESpec     {} -> error "insertSpec - ESpec"
   ESpecLet  n b -> do
                     m <- reader (Map.lookup n)
@@ -234,6 +242,8 @@ insertSpec x = case x of
   ELit      {} -> return x
   EPrimFun  {} -> return x
   EVar      {} -> return x
+  ECon      R n l -> ECon R n <$> mapM insertSpec l
+  ECase     R a l -> ECase R <$> insertSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> insertSpec b) l
   e -> error $ "insertSpec: " ++ show e
 
 runReduce :: Exp -> Exp
@@ -291,6 +301,20 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
 
   -- inserted by ELet C
   ESpec n i e -> ESpecFun n args (reduce env stack e) where args = [if stage a == C then Just a else Nothing | a <- take i stack]
+
+  -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
+  ECon s n l -> ECon s n (map (reduce env stack) l)
+
+  ECase R e l -> ECase R (reduce env stack e) [Pat n v (reduce env stack a) | Pat n v a <- l]
+  ECase C e l -> case reduce env stack e of
+                  ECon C n vExp -> p where
+                    go a [] [] = a
+                    go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
+                    go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
+                    p = case find (\(Pat pn _ _) -> n == pn) l of
+                          Nothing -> error $ "no matching pattern for consrtructor: " ++ n
+                          Just (Pat _ vNames body) -> reduce (go env vNames vExp) stack body
+                  x -> error $ "invalid case expression: " ++ show x
 
   _ -> error $ "can not reduce: " ++ show e
 
