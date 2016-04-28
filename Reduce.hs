@@ -26,8 +26,6 @@ data PrimFun
   | PIfZero
   deriving (Show,Eq,Ord)
 
-data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
-
 data Exp
   = ELit      Stage Lit
   | EPrimFun  Stage PrimFun
@@ -45,6 +43,8 @@ data Exp
   | ECon      Stage ConName [Exp]
   | ECase     Stage Exp [Pat]
   deriving (Show,Eq,Ord)
+
+data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
 
 powerFun =
   ELet C "power" (ELam C "x" $ ELam C "n" $ EBody C $ ifZero (EVar C "n")
@@ -120,6 +120,9 @@ powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit2
 -------- pattern match test
 case0 = ELet C "x" (ECon C "Just" [lit2]) $ ECase C (EVar C "x") [Pat "Just" ["a"] (EVar C "a")]
 case1 = ELet R "x" (ECon R "Just" [lit2]) $ ECase R (EVar R "x") [Pat "Just" ["a"] (EVar R "a")]
+resultCase0 = ELit C (LFloat 2.0)
+resultCase1 = ELet R "x" (ECon R "Just" [ELit C (LFloat 2.0)]) (ECase R (EVar R "x") [Pat "Just" ["a"] (EVar R "a")])
+
 
 test = runReduce reduceLamId
 test1 = runReduce reduceLamFun
@@ -176,6 +179,8 @@ tests =
   , (test11,result11)
   , (test12,result12)
   , (runReduce powerExpR',result12)
+  , (runReduce case0,resultCase0)
+  , (runReduce case1,resultCase1)
   ]
 
 ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
