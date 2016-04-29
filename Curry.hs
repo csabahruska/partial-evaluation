@@ -27,6 +27,7 @@ data Exp
   | EVar EName
   | EApp Exp Exp
   | ELam EName Exp
+  | EBody Exp
   | ELet EName Exp Exp
   deriving (Show,Eq,Ord)
 
@@ -36,6 +37,7 @@ data TypedExp
   | TEVar Ty EName
   | TEApp Ty TypedExp TypedExp
   | TELam Ty EName TypedExp
+  | TEBody Ty TypedExp
   | TELet Ty EName TypedExp TypedExp
   deriving (Show,Eq,Ord)
 
@@ -133,6 +135,7 @@ infer env (ELam n e) = do
   (s1,tbody,e') <- infer (Map.insert n tv env) e
   let t = (apply tv s1) :-> tbody
   return (s1,t,\s -> TELam (apply t s) n (e' s))
+infer env (EBody e) = (\(s,t,a) -> (s,t,\b -> TEBody (apply t b) $ a b)) <$> infer env e
 infer env (ELet n e1 e2) = do
   (s1,t1,e1') <- infer env e1
   let env' = applyEnv (Map.insert n t1 env) s1

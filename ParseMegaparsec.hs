@@ -49,7 +49,7 @@ letin = do
   return $ foldr ($) a l
 
 def :: Parser (Exp -> Exp)
-def = (\n a d e -> ELet n (foldr ELam d a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc (>= i) >> expr
+def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc (>= i) >> expr
 
 expr :: Parser Exp
 expr = lam <|> letin <|> formula
@@ -70,7 +70,7 @@ primFun = PMulF <$ kw "mul" <|>
 lam :: Parser Exp
 lam = (\n e -> ELam n e) <$ op "\\" <*> var <* op "->" <*> expr
 
-test' = test "example01.lc"
+test' = test "def02.lc"
 
 test :: String -> IO ()
 test fname = do
