@@ -1,0 +1,4 @@
+done - manually annotated binding time + reducer => outputs the residual program
+
+- add binding time inference
+
