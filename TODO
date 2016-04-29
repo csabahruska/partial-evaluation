@@ -1,4 +1,5 @@
 done - manually annotated binding time + reducer => outputs the residual program
+- parse type annotations
+- switch to stage inference from type inference
 
-- add binding time inference
 
