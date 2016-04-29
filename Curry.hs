@@ -22,23 +22,23 @@ data PrimFun
   deriving (Show,Eq,Ord)
 
 data Exp
-  = ELit Lit
-  | EPrimFun PrimFun
-  | EVar EName
-  | EApp Exp Exp
-  | ELam EName Exp
-  | EBody Exp
-  | ELet EName Exp Exp
+  = ELit      Lit
+  | EPrimFun  PrimFun
+  | EVar      EName
+  | EApp      Exp Exp
+  | ELam      EName Exp
+  | EBody     Exp
+  | ELet      EName Exp Exp
   deriving (Show,Eq,Ord)
 
 data TypedExp
-  = TELit Ty Lit
+  = TELit     Ty Lit
   | TEPrimFun Ty PrimFun
-  | TEVar Ty EName
-  | TEApp Ty TypedExp TypedExp
-  | TELam Ty EName TypedExp
-  | TEBody Ty TypedExp
-  | TELet Ty EName TypedExp TypedExp
+  | TEVar     Ty EName
+  | TEApp     Ty TypedExp TypedExp
+  | TELam     Ty EName TypedExp
+  | TEBody    Ty TypedExp
+  | TELet     Ty EName TypedExp TypedExp
   deriving (Show,Eq,Ord)
 
 infixr 7 :->
