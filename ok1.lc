@@ -1,0 +1,7 @@
+-- comment
+let
+  a b = b
+  x = 2
+in a x
+
+{- hello -}

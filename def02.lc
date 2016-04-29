@@ -1,0 +1,4 @@
+let
+    f = \a -> \b -> \c -> \d -> c
+    i = 1
+in f i i i i

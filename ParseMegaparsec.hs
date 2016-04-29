@@ -27,20 +27,6 @@ lexeme = L.lexeme sc'
 symbol = L.symbol sc'
 parens = between (symbol "(") (symbol ")")
 
-{-
-lcCommentStyle = haskellCommentStyle
-
-lcIdents = haskell98Idents { _styleReserved = HashSet.fromList reservedIdents }
-  where
-    reservedIdents =
-      [ "let"
-      , "upper"
-      , "in"
-      , "add"
-      , "show"
-      , "read"
-      ]
--}
 kw w = L.symbol sc' w
 
 op w = L.symbol sc' w
@@ -49,28 +35,24 @@ var :: Parser String
 var = lexeme $ some (alphaNumChar)
 
 lit :: Parser Lit
-lit = LFloat <$ try L.float <|> LInt <$ L.integer <|> LChar <$ L.charLiteral
+lit = LFloat <$ try L.float <|> LInt <$ L.integer
 
-{-
-pItemList = L.nonIndented sc (L.indentBlock sc p)
-  where p = do
-          header <- pItem
-          return (L.IndentMany Nothing (return . (header, )) pItem)
--}
-{-
 letin :: Parser Exp
-letin = L.indentBlock sc $ do 
-  l <- kw "let" *> (localIndentation Gt $ localAbsoluteIndentation $ some def) -- WORKS
-  a <- kw "in" *> (localIndentation Gt expr)
-    return $ foldr ($) a l
+letin = do
+  (i,l) <- L.indentBlock sc $ do
+    i <- L.indentLevel
+    kw "let"
+    return (L.IndentSome Nothing (return . (i,)) def)
+  L.indentGuard sc (== i)
+  kw "in"
+  a <- expr
+  return $ foldr ($) a l
 
 def :: Parser (Exp -> Exp)
-def = (\p1 n a d p2 e -> ELet (p1,p2) n (foldr (args (p1,p2)) d a) e) <$> getPosition <*> var <*> many var <* kw "=" <*> localIndentation Gt expr <*> getPosition
-  where
-    args r n e = ELam r n e
--}
+def = (\n a d e -> ELet n (foldr ELam d a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc (>= i) >> expr
+
 expr :: Parser Exp
-expr = lam <|> {-letin <|> -}formula
+expr = lam <|> letin <|> formula
 
 formula = (\l -> foldl1 EApp l) <$> some atom
 
@@ -92,7 +74,7 @@ test' = test "example01.lc"
 
 test :: String -> IO ()
 test fname = do
-  result <- parseFromFile (expr <* eof) fname
+  result <- parseFromFile (expr <* sc <* eof) fname
   case result of
     Left err -> print err
     Right e  -> do

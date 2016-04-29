@@ -13,7 +13,6 @@ data Lit
   = LInt
   | LBool
   | LFloat
-  | LChar
   deriving (Show,Eq,Ord)
 
 data PrimFun
