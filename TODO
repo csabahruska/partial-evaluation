@@ -1,4 +1,6 @@
 done - manually annotated binding time + reducer => outputs the residual program
+- parse data constructors
+- parse case and patterns
 - parse type annotations
 - switch to stage inference from type inference
 - zip/unzip test

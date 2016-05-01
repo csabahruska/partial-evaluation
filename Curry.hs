@@ -29,7 +29,11 @@ data Exp
   | ELam      EName Exp
   | EBody     Exp
   | ELet      EName Exp Exp
+  | ECon      ConName [Exp]
+  | ECase     Exp [Pat]
   deriving (Show,Eq,Ord)
+
+data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
 
 data TypedExp
   = TELit     Ty Lit
@@ -39,6 +43,7 @@ data TypedExp
   | TELam     Ty EName TypedExp
   | TEBody    Ty TypedExp
   | TELet     Ty EName TypedExp TypedExp
+  | TECon     Ty ConName [TypedExp]
   deriving (Show,Eq,Ord)
 
 infixr 7 :->
@@ -49,8 +54,11 @@ data Ty
   | TInt
   | TBool
   | TFloat
+  | TCon TConName
   deriving (Show,Eq,Ord)
 
+type TConName = String
+type ConName = String
 type EName = String
 type TName = String
 type Env = Map EName Ty
@@ -114,6 +122,11 @@ compose a b = mappend a $ (flip apply) a <$> b
 remove :: EName -> Env -> Env
 remove n e = Map.delete n e
 
+infer env (ECon n l) = do
+  let --t = inferPrimFun f
+     t  = TCon "List"
+  l' <- mapM (infer env) l
+  return (mempty,t,\s -> TECon (apply t s) n $ map (\(_,_,e) -> e s) l') -- TODO
 infer env (EPrimFun f) = do
   let t = inferPrimFun f
   return (mempty,t,\s -> TEPrimFun (apply t s) f)

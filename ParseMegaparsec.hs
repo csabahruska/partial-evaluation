@@ -34,7 +34,10 @@ kw w = lexeme $ string w
 op w = L.symbol sc' w
 
 var :: Parser String
-var = lexeme $ some (alphaNumChar)
+var = lexeme $ (:) <$> lowerChar <*> many (alphaNumChar)
+
+con :: Parser String
+con = lexeme $ (:) <$> upperChar <*> many (alphaNumChar)
 
 lit :: Parser Lit
 lit = LFloat . realToFrac <$> lexeme L.float-- <|> LInt <$ L.integer
@@ -53,16 +56,26 @@ letin = do
 def :: Parser (Exp -> Exp)
 def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc (>= i) >> expr
 
+caseof :: Parser Exp
+caseof = uncurry ECase <$> L.indentBlock sc (do
+  kw "case"
+  e <- parens expr
+  kw "of"
+  return (L.IndentSome Nothing (return . (e,)) pat))
+
+pat :: Parser Pat
+pat = Pat <$> con <*> many var <* op "->" <*> expr
+
 expr :: Parser Exp
-expr = lam <|> letin <|> formula
+expr = lam <|> letin <|> caseof <|> formula
 
 formula = foldl1 EApp <$> some atom
 
 atom =
-  (\f -> EPrimFun f) <$> primFun <|>
-  (\l -> ELit l) <$> lit <|>
-  (\v -> EVar v) <$> var <|>
---  (\p1 v p2 -> if length v == 1 then head v else ETuple (p1,p2) v) <$> getPosition <*> parens (commaSep expr) <*> getPosition <|>
+  EPrimFun <$> primFun <|>
+  ELit <$> lit <|>
+  EVar <$> var <|>
+  ECon <$> con <*> many expr <|>
   parens expr
 
 primFun = PMulF <$ kw "mul" <|>
@@ -91,6 +104,12 @@ eval fname = do
   case result of
     Left err -> print err
     Right e  -> do
+      let exp = toExp' e
+          re = R.runReduce exp
+      print exp
+      putStrLn "-----------------"
+      print re
+{-
       case inference e of
         Right t   -> do
                       --putStrLn $ show t
@@ -100,3 +119,4 @@ eval fname = do
                       putStrLn "-----------------"
                       print re
         Left m    -> putStrLn $ "error: " ++ m
+-}
