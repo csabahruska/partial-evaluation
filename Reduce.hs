@@ -217,7 +217,7 @@ collectSpec x = case x of
   ELit      {} -> return x
   EPrimFun  {} -> return x
   EVar      {} -> return x
-  ECon      R n l -> ECon R n <$> mapM collectSpec l
+  ECon      s n l -> ECon s n <$> mapM collectSpec l
   ECase     R a l -> ECase R <$> collectSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> collectSpec b) l
   e -> error $ "collectSpec: " ++ show e
 
@@ -247,7 +247,7 @@ insertSpec x = case x of
   ELit      {} -> return x
   EPrimFun  {} -> return x
   EVar      {} -> return x
-  ECon      R n l -> ECon R n <$> mapM insertSpec l
+  ECon      s n l -> ECon s n <$> mapM insertSpec l
   ECase     R a l -> ECase R <$> insertSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> insertSpec b) l
   e -> error $ "insertSpec: " ++ show e
 
@@ -317,11 +317,11 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
                     go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
                     p = case find (\(Pat pn _ _) -> n == pn) l of
-                          Nothing -> error $ "no matching pattern for consrtructor: " ++ n
+                          Nothing -> error $ "no matching pattern for constructor: " ++ n
                           Just (Pat _ vNames body) -> reduce (go env vNames vExp) stack body
                   x -> error $ "invalid case expression: " ++ show x
 
-  _ -> error $ "can not reduce: " ++ show e
+  _ -> error $ "can not reduce: " ++ show e ++ " stack: " ++ show stack
 
 {-
   pattern match:
@@ -337,3 +337,29 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
         Nothing -> 0
         Just i  -> i
 -}
+higherTest =
+       ELet C "map" (ELam C "f" (ELam C "x" (EBody C
+                (ECase C (EVar C "x")
+                  [Pat "Nil" [] (ECon C "Nil" [])
+                  ,Pat "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
+                  ]))))
+      (ELet C "l" (EBody C (ECon C "Cons" [ELit C (LFloat 1.0),ECon C "Cons" [ELit C (LFloat 2.0),ECon C "Cons" [ELit C (LFloat 3.0),ECon C "Nil" []]]]))
+      (ELet C "go" (ELam C "z" (EBody C
+                (ECase C (EVar C "z")
+                  [Pat "Nil" [] (ELit C (LFloat 0.0))
+                  ,Pat "Cons" ["b","bs"] (EApp C (EApp C (EPrimFun C PAdd) (EVar C "b")) (EApp C (EVar C "go") (EVar C "bs")))])))
+      (ELet C "five" (ELam C "y" (EBody C
+                (EApp C (EApp C (EPrimFun C PMul) (ELit C (LFloat 5.0))) (EVar C "y"))))
+
+      (EApp C (EVar C "go") (EApp C (EApp C (EVar C "map") (EVar C "five")) (EVar C "l"))))))
+
+mapTest =
+  ELet C "map" (ELam C "f" (ELam C "x" (EBody C
+            (ECase C (EVar C "x")
+              [Pat "Nil" [] (ECon C "Nil" [])
+              ,Pat "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
+              ]))))
+  (ELet C "five" (ELam C "y" (EBody C
+            (EApp C (EApp C (EPrimFun C PMul) (ELit C (LFloat 5.0))) (EVar C "y"))))
+
+  (EApp C (EApp C (EVar C "map") (EVar C "five")) (ECon C "Cons" [ELit C (LFloat 3.0),ECon C "Nil" []])))

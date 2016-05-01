@@ -45,7 +45,7 @@ con :: Parser String
 con = lexeme $ (:) <$> upperChar <*> many (alphaNumChar)
 
 lit :: Parser Lit
-lit = LFloat . realToFrac <$> lexeme L.float-- <|> LInt <$ L.integer
+lit = LFloat . realToFrac <$> try (lexeme L.float) <|> LFloat . fromIntegral <$> lexeme L.integer
 
 letin :: Parser Exp
 letin = do
@@ -72,15 +72,16 @@ pat :: Parser Pat
 pat = Pat <$> con <*> many var <* op "->" <*> expr
 
 expr :: Parser Exp
-expr = lam <|> letin <|> caseof <|> formula
+expr = lam <|> try letin <|> try caseof <|> constr <|> formula
 
 formula = foldl1 EApp <$> some atom
+constr = ECon <$> con <*> many atom
 
 atom =
   EPrimFun <$> primFun <|>
   ELit <$> lit <|>
   EVar <$> var <|>
-  ECon <$> con <*> many expr <|>
+  ECon <$> con <*> pure [] <|>
   parens expr
 
 primFun = PMulF <$ kw "mul" <|>
@@ -105,10 +106,12 @@ test fname = do
 
 eval :: String -> IO ()
 eval fname = do
-  result <- parseFromFile (L.nonIndented sc $ expr <* sc <* eof) fname
+  result <- parseFromFile (L.nonIndented sc expr <* sc <* eof) fname
   case result of
     Left err -> print err
     Right e  -> do
+      --print e
+      --putStrLn "-----------------"
       let exp = toExp' e
           re = R.runReduce exp
       print exp
