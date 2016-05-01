@@ -1,7 +1,7 @@
 -- comment
 let
   a b = b
-  x = 2
+  x = mul 3.0 2.0
 in a x
 
 {- hello -}

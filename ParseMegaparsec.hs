@@ -8,6 +8,8 @@ import Text.Megaparsec
 import Text.Megaparsec.String
 import qualified Text.Megaparsec.Lexer as L
 import Curry hiding (test)
+import ToReduce
+import qualified Reduce as R
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -27,7 +29,7 @@ lexeme = L.lexeme sc'
 symbol = L.symbol sc'
 parens = between (symbol "(") (symbol ")")
 
-kw w = L.symbol sc' w
+kw w = lexeme $ string w
 
 op w = L.symbol sc' w
 
@@ -35,7 +37,7 @@ var :: Parser String
 var = lexeme $ some (alphaNumChar)
 
 lit :: Parser Lit
-lit = LFloat <$ try L.float <|> LInt <$ L.integer
+lit = LFloat . realToFrac <$> lexeme L.float-- <|> LInt <$ L.integer
 
 letin :: Parser Exp
 letin = do
@@ -54,7 +56,7 @@ def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw
 expr :: Parser Exp
 expr = lam <|> letin <|> formula
 
-formula = (\l -> foldl1 EApp l) <$> some atom
+formula = foldl1 EApp <$> some atom
 
 atom =
   (\f -> EPrimFun f) <$> primFun <|>
@@ -81,4 +83,20 @@ test fname = do
       print e
       case inference e of
         Right t   -> putStrLn $ show t
+        Left m    -> putStrLn $ "error: " ++ m
+
+eval :: String -> IO ()
+eval fname = do
+  result <- parseFromFile (L.nonIndented sc $ expr <* sc <* eof) fname
+  case result of
+    Left err -> print err
+    Right e  -> do
+      case inference e of
+        Right t   -> do
+                      --putStrLn $ show t
+                      let exp = toExp t
+                          re = R.runReduce exp
+                      print exp
+                      putStrLn "-----------------"
+                      print re
         Left m    -> putStrLn $ "error: " ++ m

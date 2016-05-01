@@ -12,7 +12,7 @@ import Data.Functor
 data Lit
   = LInt
   | LBool
-  | LFloat
+  | LFloat  Float
   deriving (Show,Eq,Ord)
 
 data PrimFun
@@ -64,9 +64,9 @@ inferPrimFun a = case a of
 
 inferLit :: Lit -> Ty
 inferLit a = case a of
-  LInt    -> TInt
-  LBool   -> TBool
-  LFloat  -> TFloat
+  LInt      -> TInt
+  LBool     -> TBool
+  LFloat{}  -> TFloat
 
 type Unique a = StateT Int (Except String) a
 
@@ -152,23 +152,20 @@ inference e = runIdentity $ runExceptT $ (flip evalStateT) 0 act
 -- test
 ok =
   [ ELit LInt
-{-
   , ELam "x" $ EVar "x"
-  , ELam "x" $ ELam "y" $ ELit LFloat
+  , ELam "x" $ ELam "y" $ ELit $ LFloat 1
   , ELam "x" $ EApp (EVar "x") (ELit LBool)
   , ELam "x" $ EApp (EApp (EPrimFun PAddI) (ELit LInt)) (EVar "x")
--}
   , ELet "id" (ELam "x" $ EVar "x") (ELet "a" (EApp (EVar "id") (ELit LBool)) (EApp (EVar "id") (ELit LBool)))
   ]
 err =
   [ ELam "x" $ EApp (EVar "x") (EVar "x")
   , EApp (ELit LInt) (ELit LInt)
-  , ELet "id" (ELam "x" $ EVar "x") (ELet "a" (EApp (EVar "id") (ELit LBool)) (EApp (EVar "id") (ELit LFloat)))
+  , ELet "id" (ELam "x" $ EVar "x") (ELet "a" (EApp (EVar "id") (ELit LBool)) (EApp (EVar "id") (ELit $ LFloat 1)))
   ]
 
 test = do
   putStrLn "Ok:"
   mapM_ (\e -> print e >> (print . inference $ e)) ok
---  putStrLn "Error:"
---  mapM_ (\e -> print e >> (print . inference $ e)) err
-
+  putStrLn "Error:"
+  mapM_ (\e -> print e >> (print . inference $ e)) err
