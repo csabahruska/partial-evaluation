@@ -1,0 +1,6 @@
+let
+    map f x = case x of
+                Nil -> Nil
+                Cons a xs -> Cons (f a) (map f xs)
+    five y = mul 5 y
+in map five (Cons 3 Nil)

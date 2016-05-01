@@ -1,0 +1,12 @@
+let
+    map f x = case x of
+                Nil -> Nil
+                Cons a xs -> Cons (f a) (map f xs)
+
+    l = Cons 1 (Cons 2 (Cons 3 Nil))
+    go z = case z of
+            Nil -> 0
+            Cons b bs -> add b (go bs)
+    five y = mul 5 y
+in go (map (\y -> mul 5 y) l)
+--in go (map five l)
