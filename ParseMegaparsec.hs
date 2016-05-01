@@ -10,6 +10,9 @@ import qualified Text.Megaparsec.Lexer as L
 import Curry hiding (test)
 import ToReduce
 import qualified Reduce as R
+import qualified Data.Set as Set
+
+keywords = Set.fromList ["let","in","case","of"]
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -34,7 +37,9 @@ kw w = lexeme $ string w
 op w = L.symbol sc' w
 
 var :: Parser String
-var = lexeme $ (:) <$> lowerChar <*> many (alphaNumChar)
+var = try $ lexeme ((:) <$> lowerChar <*> many (alphaNumChar)) >>= \x -> case Set.member x keywords of
+  True -> unexpected $ "keyword: " ++ x
+  False -> return x
 
 con :: Parser String
 con = lexeme $ (:) <$> upperChar <*> many (alphaNumChar)
@@ -59,7 +64,7 @@ def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw
 caseof :: Parser Exp
 caseof = uncurry ECase <$> L.indentBlock sc (do
   kw "case"
-  e <- parens expr
+  e <- expr
   kw "of"
   return (L.IndentSome Nothing (return . (e,)) pat))
 
