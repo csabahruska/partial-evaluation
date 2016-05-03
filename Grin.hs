@@ -39,6 +39,9 @@ data Val
   -- simple val
   | Lit Lit
   | Var Name
+  -- extra
+  | Loc Int
+  | Undefined
   deriving Show
 
 data Lit = LFloat Float
@@ -74,6 +77,9 @@ bind env v p = env -- TODO
 lookupEnv :: Name -> Env -> Val
 lookupEnv n env = Map.findWithDefault (error $ "missing variable: " ++ n) n env
 
+lookupStore :: Int -> Store -> Val
+lookupStore i s = IntMap.findWithDefault (error $ "missing location: " ++ show i) i s
+
 evalVal :: Env -> Val -> Val
 evalVal env = \case
   v@Lit{}     -> v
@@ -85,15 +91,35 @@ evalVal env = \case
                   x -> error $ "evalVal - invalid VarNode tag: " ++ show x
   v@ValTag{}  -> v
   Unit        -> Unit
+  v@Loc{}     -> v
   x -> error $ "evalVal: " ++ show x
 
 evalSimpleExp :: Env -> SimpleExp -> GrinM Val
 evalSimpleExp env = \case
+--  = App     Name [SimpleVal]
+  Return v -> return $ evalVal env v
+  Store v -> do
+              l <- gets IntMap.size
+              let v' = evalVal env v
+              modify' (IntMap.insert l v')
+              return $ Loc l
+  Fetch n -> case lookupEnv n env of
+              Loc l -> gets $ lookupStore l
+              x -> error $ "evalSimpleExp - Fetch expected location, got: " ++ show x
+--  | FetchI  Name Int -- fetch node component
+  Update n v -> do
+              let v' = evalVal env v
+              case lookupEnv n env of
+                Loc l -> get >>= \s -> case IntMap.member l s of
+                            False -> error $ "evalSimpleExp - Update unknown location: " ++ show l
+                            True  -> modify' (IntMap.insert l v') >> return Unit
+                x -> error $ "evalSimpleExp - Update expected location, got: " ++ show x
+--  | Block   Exp
   x -> error $ "evalSimpleExp: " ++ show x
 
 evalExp :: Env -> Exp -> GrinM Val
 evalExp env = \case
   Bind op pat exp -> evalSimpleExp env op >>= \v -> evalExp (bind env v pat) exp
   -- | Case  Val [Alt]
-  -- | SExp  SimpleExp
+  SExp exp -> evalSimpleExp env exp
   x -> error $ "evalExp: " ++ show x
