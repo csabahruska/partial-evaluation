@@ -92,7 +92,13 @@ evalVal env = \case
 
 evalSimpleExp :: Env -> SimpleExp -> GrinM Val
 evalSimpleExp env = \case
-  App n a -> ask >>= \defs -> let f = Map.findWithDefault (error $ "unknown function: " ++ n) n defs :: Def in return Unit -- TODO
+  App n a -> do
+              let args = map (evalVal env) a
+                  go a [] [] = a
+                  go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
+                  go _ x y = error $ "invalid pattern for function: " ++ show (n,x,y)
+              Def _ vars body <- reader $ Map.findWithDefault (error $ "unknown function: " ++ n) n
+              evalExp (go env vars args) body
   Return v -> return $ evalVal env v
   Store v -> do
               l <- gets IntMap.size
@@ -134,6 +140,6 @@ TODO:
   execute GRIN (reduction)
     done - make Prog available in eval (needed for App)
     done - case
-    app
+    done - app
     bindPat
 -}
