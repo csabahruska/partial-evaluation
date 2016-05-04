@@ -6,6 +6,7 @@ import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Control.Monad.State
+import Control.Monad.Reader
 
 type Name = String
 
@@ -24,9 +25,9 @@ data SimpleExp
   | Return  Val
   | Store   Val
   | Fetch   Name
-  | FetchI  Name Int -- fetch node component
+--  | FetchI  Name Int -- fetch node component
   | Update  Name Val
-  | Block   Exp
+--  | Block   Exp
   deriving Show
 
 type LPat = Val
@@ -45,7 +46,7 @@ data Val
   deriving Show
 
 data Lit = LFloat Float
-  deriving Show
+  deriving (Eq,Show)
 
 data Alt = Alt CPat Exp
   deriving Show
@@ -57,22 +58,17 @@ data CPat
   deriving Show
 
 data TagType = C | F | P
-  deriving Show
+  deriving (Eq,Show)
 
 data Tag = Tag TagType Name Int
-  deriving Show
+  deriving (Eq,Show)
 
-{-
-TODO:
-  compile to GRIN
-  execute GRIN (reduction)
--}
 type Store = IntMap Val
 type Env = Map Name Val
-type GrinM = State Store
+type GrinM = ReaderT Prog (State Store)
 
-bind :: Env -> Val -> LPat -> Env
-bind env v p = env -- TODO
+bindPat :: Env -> Val -> LPat -> Env
+bindPat env v p = env -- TODO
 
 lookupEnv :: Name -> Env -> Val
 lookupEnv n env = Map.findWithDefault (error $ "missing variable: " ++ n) n env
@@ -90,13 +86,13 @@ evalVal env = \case
                   ValTag t  -> TagNode t $ map (evalVal env) a
                   x -> error $ "evalVal - invalid VarNode tag: " ++ show x
   v@ValTag{}  -> v
-  Unit        -> Unit
+  v@Unit      -> v
   v@Loc{}     -> v
   x -> error $ "evalVal: " ++ show x
 
 evalSimpleExp :: Env -> SimpleExp -> GrinM Val
 evalSimpleExp env = \case
---  = App     Name [SimpleVal]
+  App n a -> ask >>= \defs -> let f = Map.findWithDefault (error $ "unknown function: " ++ n) n defs :: Def in return Unit -- TODO
   Return v -> return $ evalVal env v
   Store v -> do
               l <- gets IntMap.size
@@ -119,7 +115,25 @@ evalSimpleExp env = \case
 
 evalExp :: Env -> Exp -> GrinM Val
 evalExp env = \case
-  Bind op pat exp -> evalSimpleExp env op >>= \v -> evalExp (bind env v pat) exp
-  -- | Case  Val [Alt]
+  Bind op pat exp -> evalSimpleExp env op >>= \v -> evalExp (bindPat env v pat) exp
+  Case v alts -> case evalVal env v of
+    TagNode t l -> let (vars,exp) = head $ [(b,exp) | Alt (NodePat a b) exp <- alts, a == t] ++ error ("evalExp - missing Case Node alternative for: " ++ show t)
+                       go a [] [] = a
+                       go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
+                       go _ x y = error $ "invalid pattern and constructor: " ++ show (t,x,y)
+                   in  evalExp (go env vars l) exp
+    ValTag t    -> evalExp env $ head $ [exp | Alt (TagPat a) exp <- alts, a == t] ++ error ("evalExp - missing Case Tag alternative for: " ++ show t)
+    Lit l       -> evalExp env $ head $ [exp | Alt (LitPat a) exp <- alts, a == l] ++ error ("evalExp - missing Case Lit alternative for: " ++ show l)
+    x -> error $ "evalExp - invalid Case dispatch value: " ++ show x
   SExp exp -> evalSimpleExp env exp
   x -> error $ "evalExp: " ++ show x
+
+{-
+TODO:
+  compile to GRIN
+  execute GRIN (reduction)
+    done - make Prog available in eval (needed for App)
+    done - case
+    app
+    bindPat
+-}
