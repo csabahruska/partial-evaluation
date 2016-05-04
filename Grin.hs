@@ -165,8 +165,16 @@ primAdd x = error $ "primAdd - invalid arguments: " ++ show x
 primMul [Lit (LFloat a), Lit (LFloat b)] = return $ Lit $ LFloat $ a * b
 primMul x = error $ "primMul - invalid arguments: " ++ show x
 
+reduce :: Exp -> Val
+reduce e = evalState (runReaderT (evalExp mempty e) mempty) mempty
 {-
 TODO:
   done - execute GRIN (reduction)
   compile to GRIN
+    - lambda lifting
+    - generate eval
+    - generate apply
 -}
+sadd = App "add" [Lit $ LFloat 3, Lit $ LFloat 2]
+test = SExp sadd
+test2 = Bind sadd (Var "a") $ SExp $ App "mul" [Var "a", Var "a"]
