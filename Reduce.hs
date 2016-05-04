@@ -4,6 +4,8 @@
 
 module Reduce where
 
+import Text.Show.Pretty
+
 import Debug.Trace
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -42,6 +44,8 @@ data Exp
   -- pattern match
   | ECon      Stage ConName [Exp]
   | ECase     Stage Exp [Pat]
+  -- partial app
+  | EThunk    Env [EName] [Exp] Exp -- env, missing args, applied args, body
   deriving (Show,Eq,Ord)
 
 data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
@@ -115,7 +119,7 @@ insertSpec x = case x of
 runReduce :: Exp -> Exp
 runReduce exp = runReader (insertSpec rExp) m
   where
-    rExp = reduce mempty mempty exp
+    rExp = reduce mempty exp
     specMap = execWriter $ collectSpec rExp
     m = go (Map.toList specMap) mempty
     go [] m = m
@@ -125,37 +129,53 @@ runReduce exp = runReader (insertSpec rExp) m
         Nothing -> Map.adjust (\sm -> Map.insert a (n ++ show (Map.size sm),f) sm) n m
         Just _  -> m
 
-reduce :: Env -> [Exp] -> Exp -> Exp
-reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
+reduce :: Env -> Exp -> Exp
+reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> e
-  -- question: who should reduce the stack arguments?
-  --  answer: EApp
 
-  EPrimFun C PAdd | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a + b
-  EPrimFun C PMul | (ELit _ (LFloat a)):(ELit _ (LFloat b)):_ <- stack -> ELit C $ LFloat $ a * b
-  EPrimFun C PIfZero | (ELit _ (LFloat v)):th:el:_ <- stack -> if v == 0 then th else el
+  EPrimFun C PAdd -> EThunk mempty ["x","y"] [] e
+  EPrimFun C PMul -> EThunk mempty ["x","y"] [] e
+  EPrimFun C PIfZero -> EThunk mempty ["c","t","e"] [] e
 
   EPrimFun R _ -> e
 
   EVar R n -> e
   EVar C n -> case Map.lookup n env of
     Nothing -> error $ "missing variable: " ++ n
-    Just v -> reduce env stack v
+    Just v -> reduce env v
 
-  ELam C n x -> reduce (addEnv env n (head stack)) (tail stack) x
-  ELam R n x -> ELam R n $ reduce env (tail stack) x
+  -- check arity and create thunk: env + missing arg count
+  ELam C n x -> go [n] x where
+        go l x = case x of
+          ELam _ a x -> go (a:l) x
+          b -> EThunk env (reverse l) [] b
 
-  EBody C a -> reduce env stack a
-  EBody R a -> EBody R $ reduce env stack a
+  --ELam R n x -> ELam R n $ reduce env (tail stack) x
 
-  EApp C f a -> reduce env (a':stack) f where a' = reduce env stack a
-  EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
+  EBody C a -> reduce env a
+  EBody R a -> EBody R $ reduce env a
 
-  ELet R n a b -> ELet R n (reduce env stack a) (reduce env stack b)
+  -- apply arg to thunk or if it's saturated then cretate a new thunk
+  EApp C f a -> let a' = reduce env a in
+                case reduce env f of
+                  EThunk tenv [n] s b -> let env' = (Map.insert n a' tenv) in case b of
+                    EPrimFun C PAdd | Just (ELit _ (LFloat a)) <- Map.lookup "x" env'
+                                    , Just (ELit _ (LFloat b)) <- Map.lookup "y" env' -> ELit C $ LFloat $ a + b
+                    EPrimFun C PMul | Just (ELit _ (LFloat a)) <- Map.lookup "x" env'
+                                    , Just (ELit _ (LFloat b)) <- Map.lookup "y" env' -> ELit C $ LFloat $ a * b
+                    EPrimFun C PIfZero | Just (ELit _ (LFloat v)) <- Map.lookup "c" env'
+                                       , Just th <- Map.lookup "t" env'
+                                       , Just el <- Map.lookup "e" env' -> if v == 0 then th else el
+                    x -> reduce env' b
+                  EThunk tenv (n:ns) s b -> EThunk (Map.insert n a' tenv) ns (a':s) b
+                  x -> error $ "EApp - expected a thunk, got: " ++ show x
+  --EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
+
+  ELet R n a b -> ELet R n (reduce env a) (reduce env b)
   ELet C n a b ->
     case arity > 0 && needSpec of
-      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) stack b
-      False -> reduce (addEnv env n a) stack b
+      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b
+      False -> reduce (addEnv env n a) b
    where
         go i l x = case x of
           EBody s _ -> (i,l)
@@ -166,23 +186,25 @@ reduce env stack e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}cas
         needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
 
   -- inserted by ELet C
-  ESpec n i e -> ESpecFun n args (reduce env stack e) where args = [if stage a == C then Just a else Nothing | a <- take i stack]
+  ESpec n i e -> ESpecFun n args (reduce env e) where args = [if stage a == C then Just a else Nothing | a <- take i []] -- TODO
 
   -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
-  ECon s n l -> ECon s n (map (reduce env stack) l)
+  ECon s n l -> ECon s n (map (reduce env) l)
 
-  ECase R e l -> ECase R (reduce env stack e) [Pat n v (reduce env stack a) | Pat n v a <- l]
-  ECase C e l -> case reduce env stack e of
+  ECase R e l -> ECase R (reduce env e) [Pat n v (reduce env a) | Pat n v a <- l]
+  ECase C e l -> case reduce env e of
                   ECon C n vExp -> p where
                     go a [] [] = a
                     go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
                     p = case find (\(Pat pn _ _) -> n == pn) l of
                           Nothing -> error $ "no matching pattern for constructor: " ++ n
-                          Just (Pat _ vNames body) -> reduce (go env vNames vExp) stack body
+                          Just (Pat _ vNames body) -> reduce (go env vNames vExp) body
                   x -> error $ "invalid case expression: " ++ show x
 
-  _ -> error $ "can not reduce: " ++ show e ++ " stack: " ++ show stack
+  EThunk tenv [] _ b -> reduce tenv b
+  EThunk{} -> e
+  _ -> error $ "can not reduce: " ++ ppShow e
 
 {-
   pattern match:
