@@ -43,7 +43,7 @@ data Val
   -- extra
   | Loc Int
   | Undefined
-  deriving Show
+  deriving (Eq,Show)
 
 data Lit = LFloat Float
   deriving (Eq,Show)
@@ -67,8 +67,28 @@ type Store = IntMap Val
 type Env = Map Name Val
 type GrinM = ReaderT Prog (State Store)
 
+bindPatMany :: Env -> [Val] -> [LPat] -> Env
+bindPatMany a [] [] = a
+bindPatMany a (x:xs) (y:ys) = bindPatMany (bindPat a x y) xs ys
+bindPatMany _ x y = error $ "bindPatMany - pattern mismatch: " ++ show (x,y)
+
 bindPat :: Env -> Val -> LPat -> Env
-bindPat env v p = env -- TODO
+bindPat env v p = case p of
+  Var n -> case v of
+              ValTag{}  -> Map.insert n v env
+              Unit      -> Map.insert n v env
+              Lit{}     -> Map.insert n v env
+              Loc{}     -> Map.insert n v env
+              Undefined -> Map.insert n v env
+              _ -> error $ "bindPat - illegal value: " ++ show v
+  TagNode t l -> case v of
+                  TagNode vt vl | vt == t -> bindPatMany env vl l
+                  _ -> error $ "bindPat - illegal value for TagNode: " ++ show v
+  VarNode n l -> case v of
+                  TagNode vt vl -> bindPatMany (Map.insert n (ValTag vt) env) vl l
+                  _ -> error $ "bindPat - illegal value for TagNode: " ++ show v
+  _ | p == v -> env
+    | otherwise -> error $ "bindPat - pattern mismatch" ++ show (v,p)
 
 lookupEnv :: Name -> Env -> Val
 lookupEnv n env = Map.findWithDefault (error $ "missing variable: " ++ n) n env
@@ -97,8 +117,12 @@ evalSimpleExp env = \case
                   go a [] [] = a
                   go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
                   go _ x y = error $ "invalid pattern for function: " ++ show (n,x,y)
-              Def _ vars body <- reader $ Map.findWithDefault (error $ "unknown function: " ++ n) n
-              evalExp (go env vars args) body
+              case n of
+                "add" -> primAdd args
+                "mul" -> primMul args
+                _ -> do
+                  Def _ vars body <- reader $ Map.findWithDefault (error $ "unknown function: " ++ n) n
+                  evalExp (go env vars args) body
   Return v -> return $ evalVal env v
   Store v -> do
               l <- gets IntMap.size
@@ -134,12 +158,15 @@ evalExp env = \case
   SExp exp -> evalSimpleExp env exp
   x -> error $ "evalExp: " ++ show x
 
+-- primitive functions
+primAdd [Lit (LFloat a), Lit (LFloat b)] = return $ Lit $ LFloat $ a + b
+primAdd x = error $ "primAdd - invalid arguments: " ++ show x
+
+primMul [Lit (LFloat a), Lit (LFloat b)] = return $ Lit $ LFloat $ a * b
+primMul x = error $ "primMul - invalid arguments: " ++ show x
+
 {-
 TODO:
+  done - execute GRIN (reduction)
   compile to GRIN
-  execute GRIN (reduction)
-    done - make Prog available in eval (needed for App)
-    done - case
-    done - app
-    bindPat
 -}
