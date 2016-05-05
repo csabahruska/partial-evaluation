@@ -157,13 +157,9 @@ reduce :: Env -> Exp -> Exp
 reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> e
 
-  EPrimFun C PAdd -> primThunk ["x","y"] e
-  EPrimFun C PMul -> primThunk ["x","y"] e
-  EPrimFun C PIfZero -> primThunk ["c","t","e"] e
-
-  EPrimFun R PAdd -> primThunk ["x","y"] e
-  EPrimFun R PMul -> primThunk ["x","y"] e
-  EPrimFun R PIfZero -> primThunk ["c","t","e"] e
+  EPrimFun _ PAdd -> primThunk ["x","y"] e
+  EPrimFun _ PMul -> primThunk ["x","y"] e
+  EPrimFun _ PIfZero -> primThunk ["c","t","e"] e
 
   EVar R n -> e
   EVar C n -> case Map.lookup n env of
