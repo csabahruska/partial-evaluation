@@ -13,6 +13,7 @@ reduceExp = powerFun $ EApp C (EApp C (EVar C "power") (ELit C $ LFloat 2.0)) (E
 
 lit0R = ELit R $ LFloat 0.0
 lit1R = ELit R $ LFloat 1.0
+lit10R = ELit R $ LFloat 10.0
 
 lit0 = ELit C $ LFloat 0.0
 lit1 = ELit C $ LFloat 1.0
@@ -50,7 +51,15 @@ primMulC x y = EApp C (EApp C (EPrimFun C PMul) x) y
 primAddR x y = EApp R (EApp R (EPrimFun R PAdd) x) y
 specFun0 = ELam R "x" $ ELam C "y" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
 letSpecFun0 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") lit1R) lit2
-letSpecFun1 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") (EApp C (EApp R (EVar C "f") lit1R) lit1)) lit2
+letSpecFun1 = ELet C "f" specFun0 $ EApp C (EApp R (EVar C "f") (EApp C (EApp R (EVar C "f") lit1R) lit2)) lit3
+
+
+specFun2 = ELam R "x" $ ELam C "y" $ ELam R "z" $ EBody R $ primAddR (EVar R "x") (EVar C "y")
+letSpecFun2 = ELet C "f" specFun2 $ EApp R (EApp C (EApp R (EVar C "f") lit1R) lit2) lit10R
+
+
+specFun3 = ELam R "x" $ ELam C "y" $ ELam R "z" $ EBody R $ primMulC lit2 lit3
+partEval1 = ELet C "f" specFun3 $ lit0
 {-
   the generic function "f" should not be used in the residual; should be replaced with the specialised functions in the same scope
 -}
@@ -110,14 +119,18 @@ result9 = ELit C (LFloat 2.0)
 resultPower = ELit C (LFloat 16.0)
 result10 = ELet R "f0" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0))))) (EApp R (EVar R "f0") (ELit R (LFloat 1.0)))
 result11 =
-   ELet R "f0" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 1.0)))))
-  (ELet R "f1" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0)))))
+   ELet R "f0" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0)))))
+  (ELet R "f1" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 3.0)))))
   (EApp R (EVar R "f1") (EApp R (EVar R "f0") (ELit R (LFloat 1.0)))))
 
 result12 =
    ELet R "power0" (ELam R "x" (EBody R (ELit C (LFloat 1.0))))
   (ELet R "power1" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PMul) (EVar R "x")) (EApp R (EVar R "power0") (EVar R "x")))))
   (EApp R (EVar R "power1") (ELit C (LFloat 2.0))))
+
+result13 =
+   ELet R "f0" (ELam R "x" (ELam R "z" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0))))))
+  (EApp R (EApp R (EVar R "f0") (ELit R (LFloat 1.0))) (ELit R (LFloat 10.0)))
 
 tests =
   [ (test,result)
@@ -137,6 +150,7 @@ tests =
   , (runReduce powerExpR',result12)
   , (runReduce case0,resultCase0)
   , (runReduce case1,resultCase1)
+  , (runReduce letSpecFun2, result13)
   ]
 
 ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests

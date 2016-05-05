@@ -138,7 +138,7 @@ evalThunk (EThunk spec env [] ns vs exp) = foldr mkApp (mkSpecFun $ foldr mkLam 
 
   mkSpecFun e = case spec of
     Nothing    -> e
-    Just (n,i) -> ESpecFun n args e where args = [if s == C then Just a else Nothing | Arg s a <- take i vs]
+    Just (n,i) -> ESpecFun n args e where args = [if s == C then Just a else Nothing | Arg s a <- take i $ reverse $ {-trace ("\n* ESpecFun args: " ++ show (reverse vs))-} vs]
 
   mkApp (Arg C _) x = x
   mkApp (Arg R v) x = EApp R x v
@@ -170,7 +170,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELam{} -> go [] e where
         go l x = case x of
           ELam s a x -> go ((Arg s a):l) x
-          b -> EThunk Nothing env revl revl [] b where revl = reverse l
+          b -> EThunk Nothing env revl revl [] b where revl = reverse $ {-trace ("\n* EThunk args: " ++ show l)-} l
 
   EBody C a -> reduce env a
   EBody R a -> EBody R $ reduce env a
