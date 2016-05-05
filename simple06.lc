@@ -8,4 +8,8 @@ let
             Nil -> 0
             Cons b bs -> add b (go bs)
     five y = mul 5 y
-in go (map five l)
+    fromto0 i = case i of
+                  0 -> 4
+                  _ -> 2
+in fromto0 0 --go (map (\y -> mul 5 y) l)
+--in go (map five l)
