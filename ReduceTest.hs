@@ -167,3 +167,15 @@ mapTest =
             (EApp C (EApp C (EPrimFun C PMul) (ELit C (LFloat 5.0))) (EVar C "y"))))
 
   (EApp C (EApp C (EVar C "map") (EVar C "five")) (ECon C "Cons" [ELit C (LFloat 3.0),ECon C "Nil" []])))
+
+{-
+ELet R "f0" (ELam R "x" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (ELit C (LFloat 2.0))))) (EApp R (EVar R "f0") (ELit R (LFloat 1.0)))
+ELet R "f0" (ELam R "x" (EBody R (                EPrimFun R PAdd)))                                      (EApp R (EVar R "f0") (ELit R (LFloat 1.0)))
+
+src:
+ ELet C "f" (ELam R "x" (ELam C "y" (EBody R (EApp R (EApp R (EPrimFun R PAdd) (EVar R "x")) (EVar C "y")))))
+(EApp C (EApp R (EVar C "f") (ELit R (LFloat 1.0))) (ELit C (LFloat 2.0)))
+
+
+ESpecLet "f" (EApp R (ESpecFun "f" [Just (ELit C (LFloat 2.0)),Nothing] (ELam R "x" (EBody R (EApp R (EApp R (EThunk Nothing (fromList []) [Arg R "x",Arg R "y"] [Arg R "x",Arg R "y"] [] (EPrimFun R PAdd)) (EVar R "x")) (ELit C (LFloat 2.0)))))) (ELit R (LFloat 1.0)))
+-}
