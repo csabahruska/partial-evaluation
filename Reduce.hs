@@ -178,11 +178,9 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   -- apply arg to thunk or if it's saturated then cretate a new thunk
   EApp s f a -> let a' = reduce env a in
                 case reduce env f of
-                  EThunk spec tenv ((Arg s' n):ns) args apps b
-                    | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show e
-                    | otherwise -> evalThunk $ case s of
-                                    C -> EThunk spec (Map.insert n a' tenv) ns args ((Arg C a'):apps) b
-                                    R -> EThunk spec (Map.insert n a' tenv) ns args ((Arg R a'):apps) b
+                  EThunk spec tenv names@((Arg s' n):ns) args apps b
+                    | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show (e,names) -- TODO
+                    | otherwise -> evalThunk $ EThunk spec (Map.insert n a' tenv) ns args ((Arg s a'):apps) b
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
