@@ -181,13 +181,14 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   EBody R a -> EBody R $ reduce env a
 
   -- apply arg to thunk or if it's saturated then cretate a new thunk
-  EApp s f a -> let a' = reduce env a in evalThunk $
+  EApp s f a -> let a' = reduce env a in
                 case reduce env f of
                   EThunk tenv ((Arg s' n):ns) args apps b
-                    | s /= s' -> error $ "EApp - stage mismatch: " ++ show e
-                    | otherwise -> case s of
+                    | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show e
+                    | otherwise -> evalThunk $ case s of
                                     C -> EThunk (Map.insert n a' tenv) ns args ((Arg C a'):apps) b
                                     R -> EThunk tenv ns args ((Arg R a'):apps) b
+                  x@(EPrimFun R _) -> x
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
@@ -202,7 +203,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
           _ | i == 0 -> (i,l)
             | otherwise -> error $ "invalid function: " ++ show a
         (arity,stages) = go 0 [] a
-        needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
+        needSpec = False -- not $ null [() | C <- stages] || null [() | R <- stages]
 
   -- inserted by ELet C
   ESpec n i e -> ESpecFun n args (reduce env e) where args = [if stage a == C then Just a else Nothing | a <- take i []] -- TODO
