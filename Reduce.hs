@@ -45,8 +45,10 @@ data Exp
   | ECon      Stage ConName [Exp]
   | ECase     Stage Exp [Pat]
   -- partial app
-  | EThunk    Env [EName] [Exp] Exp -- env, missing args, applied args, body
+  | EThunk    Env [Arg EName] [Arg EName] [Arg Exp] Exp -- env, missing args, all arg names, applied args, body
   deriving (Show,Eq,Ord)
+
+data Arg a = Arg Stage a deriving (Show,Eq,Ord)
 
 data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
 
@@ -129,13 +131,38 @@ runReduce exp = runReader (insertSpec rExp) m
         Nothing -> Map.adjust (\sm -> Map.insert a (n ++ show (Map.size sm),f) sm) n m
         Just _  -> m
 
+primThunk :: [EName] -> Exp -> Exp
+primThunk l = EThunk mempty ns ns [] where ns = [Arg C n | n <- l]
+
+evalPrimFun :: Env -> PrimFun -> Exp
+evalPrimFun env = \case
+  PAdd | Just (ELit _ (LFloat a)) <- Map.lookup "x" env
+       , Just (ELit _ (LFloat b)) <- Map.lookup "y" env -> ELit C $ LFloat $ a + b
+  PMul | Just (ELit _ (LFloat a)) <- Map.lookup "x" env
+       , Just (ELit _ (LFloat b)) <- Map.lookup "y" env -> ELit C $ LFloat $ a * b
+  PIfZero | Just (ELit _ (LFloat v)) <- Map.lookup "c" env
+          , Just th <- Map.lookup "t" env
+          , Just el <- Map.lookup "e" env -> if v == 0 then th else el
+
+ -- TODO: add R lambdas and R apps
+evalThunk (EThunk env [] ns vs exp) = foldr mkApp (foldr mkLam rexp ns) vs where
+  rexp = case exp of
+    EPrimFun C f -> evalPrimFun env f
+    _ -> reduce env exp
+  mkApp (Arg C _) x = x
+  mkApp (Arg R v) x = EApp R x v
+  mkLam (Arg C _) x = x
+  mkLam (Arg R n) x = ELam R n x
+evalThunk e@EThunk{} = e
+evalThunk e = error $ "evalThunk - expected a thunk, got: " ++ show e
+
 reduce :: Env -> Exp -> Exp
 reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> e
 
-  EPrimFun C PAdd -> EThunk mempty ["x","y"] [] e
-  EPrimFun C PMul -> EThunk mempty ["x","y"] [] e
-  EPrimFun C PIfZero -> EThunk mempty ["c","t","e"] [] e
+  EPrimFun C PAdd -> primThunk ["x","y"] e
+  EPrimFun C PMul -> primThunk ["x","y"] e
+  EPrimFun C PIfZero -> primThunk ["c","t","e"] e
 
   EPrimFun R _ -> e
 
@@ -145,36 +172,28 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
     Just v -> reduce env v
 
   -- check arity and create thunk: env + missing arg count
-  ELam C n x -> go [n] x where
+  ELam{} -> go [] e where
         go l x = case x of
-          ELam _ a x -> go (a:l) x
-          b -> EThunk env (reverse l) [] b
-
-  --ELam R n x -> ELam R n $ reduce env (tail stack) x
+          ELam s a x -> go ((Arg s a):l) x
+          b -> EThunk env revl revl [] b where revl = reverse l
 
   EBody C a -> reduce env a
   EBody R a -> EBody R $ reduce env a
 
   -- apply arg to thunk or if it's saturated then cretate a new thunk
-  EApp C f a -> let a' = reduce env a in
+  EApp s f a -> let a' = reduce env a in evalThunk $
                 case reduce env f of
-                  EThunk tenv [n] s b -> let env' = (Map.insert n a' tenv) in case b of
-                    EPrimFun C PAdd | Just (ELit _ (LFloat a)) <- Map.lookup "x" env'
-                                    , Just (ELit _ (LFloat b)) <- Map.lookup "y" env' -> ELit C $ LFloat $ a + b
-                    EPrimFun C PMul | Just (ELit _ (LFloat a)) <- Map.lookup "x" env'
-                                    , Just (ELit _ (LFloat b)) <- Map.lookup "y" env' -> ELit C $ LFloat $ a * b
-                    EPrimFun C PIfZero | Just (ELit _ (LFloat v)) <- Map.lookup "c" env'
-                                       , Just th <- Map.lookup "t" env'
-                                       , Just el <- Map.lookup "e" env' -> if v == 0 then th else el
-                    x -> reduce env' b
-                  EThunk tenv (n:ns) s b -> EThunk (Map.insert n a' tenv) ns (a':s) b
+                  EThunk tenv ((Arg s' n):ns) args apps b
+                    | s /= s' -> error $ "EApp - stage mismatch: " ++ show e
+                    | otherwise -> case s of
+                                    C -> EThunk (Map.insert n a' tenv) ns args ((Arg C a'):apps) b
+                                    R -> EThunk tenv ns args ((Arg R a'):apps) b
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
-  --EApp R f a -> EApp R (reduce env (a':stack) f) a' where a' = reduce env stack a
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
   ELet C n a b ->
     case arity > 0 && needSpec of
-      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b
+      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b -- TODO: add fun name to thunk to generate ESpecFun at eval
       False -> reduce (addEnv env n a) b
    where
         go i l x = case x of
@@ -202,8 +221,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                           Just (Pat _ vNames body) -> reduce (go env vNames vExp) body
                   x -> error $ "invalid case expression: " ++ show x
 
-  EThunk tenv [] _ b -> reduce tenv b
-  EThunk{} -> e
+  EThunk{} -> evalThunk e
   _ -> error $ "can not reduce: " ++ ppShow e
 
 {-

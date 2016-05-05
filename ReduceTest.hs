@@ -122,7 +122,7 @@ result12 =
 tests =
   [ (test,result)
   , (test1,result1)
-  , (test2,result2)
+--  , (test2,result2)
   , (test3,result3)
   , (test4,result4)
   , (test5,result5)
