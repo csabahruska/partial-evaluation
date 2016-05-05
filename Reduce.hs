@@ -51,7 +51,7 @@ data Exp
                                                                             -- env, missing args, all arg names, applied args, body
   deriving (Show,Eq,Ord)
 
-data Arg a = Arg Stage a deriving (Show,Eq,Ord)
+data Arg a = Arg Stage !a deriving (Show,Eq,Ord)
 
 data Pat
   = PatCon      !ConName [EName] Exp
