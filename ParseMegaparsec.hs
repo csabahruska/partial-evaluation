@@ -1,6 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 
-module Main where
+module ParseMegaparsec where
 
 import Control.Applicative (empty)
 import Control.Monad (void)
@@ -44,8 +44,14 @@ var = try $ lexeme ((:) <$> lowerChar <*> many (alphaNumChar)) >>= \x -> case Se
 con :: Parser String
 con = lexeme $ (:) <$> upperChar <*> many (alphaNumChar)
 
+integer = lexeme L.integer
+signedInteger = L.signed sc' integer
+
+float = lexeme L.float
+signedFloat = L.signed sc' float
+
 lit :: Parser Lit
-lit = LFloat . realToFrac <$> try (lexeme L.float) <|> LFloat . fromIntegral <$> lexeme L.integer
+lit = LFloat . realToFrac <$> try signedFloat <|> LFloat . fromIntegral <$> signedInteger
 
 letin :: Parser Exp
 letin = do

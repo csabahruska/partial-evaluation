@@ -1,6 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Reduce where
 
@@ -12,14 +13,15 @@ import qualified Data.Map as Map
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Data.Foldable (foldrM,find)
+import Data.Text (Text,pack,unpack)
 
-type EName = String
-type ConName = String
+type EName = Text
+type ConName = Text
 
 data Stage = R | C deriving (Show,Eq,Ord)
 
 data Lit
-  = LFloat Float
+  = LFloat !Float
   deriving (Show,Eq,Ord)
 
 data PrimFun
@@ -29,20 +31,20 @@ data PrimFun
   deriving (Show,Eq,Ord)
 
 data Exp
-  = ELit      Stage Lit
+  = ELit      Stage !Lit
   | EPrimFun  Stage PrimFun
-  | EVar      Stage EName
+  | EVar      Stage !EName
   | EApp      Stage Exp Exp
-  | ELam      Stage EName Exp
-  | ELet      Stage EName Exp Exp
+  | ELam      Stage !EName Exp
+  | ELet      Stage !EName Exp Exp
   -- specialization
   | EBody     Stage Exp
   -- inserted during reduction
-  | ESpec     EName Int Exp
-  | ESpecLet  EName Exp
-  | ESpecFun  EName [Maybe Exp] Exp -- original name, spec args, spec function
+  | ESpec     !EName !Int Exp
+  | ESpecLet  !EName Exp
+  | ESpecFun  !EName [Maybe Exp] Exp -- original name, spec args, spec function
   -- pattern match
-  | ECon      Stage ConName [Exp]
+  | ECon      Stage !ConName [Exp]
   | ECase     Stage Exp [Pat]
   -- partial app
   | EThunk    (Maybe (EName,Int)) Env [Arg EName] [Arg EName] [Arg Exp] Exp -- function specialization info (name + arity till RHS)
@@ -52,8 +54,8 @@ data Exp
 data Arg a = Arg Stage a deriving (Show,Eq,Ord)
 
 data Pat
-  = PatCon      ConName [EName] Exp
-  | PatLit      Lit Exp
+  = PatCon      !ConName [EName] Exp
+  | PatLit      !Lit Exp
   | PatWildcard Exp
   deriving (Show,Eq,Ord)
 
@@ -98,16 +100,16 @@ insertSpec x = case x of
   ESpecLet  n b -> do
                     m <- reader (Map.lookup n)
                     case m of
-                      Nothing -> error $ "insertSpec - ESpecLet: missing function: " ++ n
+                      Nothing -> error $ "insertSpec - ESpecLet: missing function: " ++ unpack n
                       Just sm -> do
                         b' <- insertSpec b
                         foldrM (\(n,a) e -> ELet R n <$> insertSpec a <*> insertSpec e) b' (Map.elems sm)
   ESpecFun  n a _ -> do
                     m <- reader (Map.lookup n)
                     case m of
-                      Nothing -> error $ "insertSpec - ESpecFun: missing function: " ++ n
+                      Nothing -> error $ "insertSpec - ESpecFun: missing function: " ++ unpack n
                       Just sm -> case Map.lookup a sm of
-                        Nothing -> error $ "insertSpec - ESpecFun: missing spec function: " ++ n ++ " args: " ++ show a
+                        Nothing -> error $ "insertSpec - ESpecFun: missing spec function: " ++ unpack n ++ " args: " ++ show a
                         Just (sn,_) -> return $ EVar R sn
   ELit      {} -> return x
   EPrimFun  {} -> return x
@@ -124,9 +126,9 @@ runReduce exp = runReader (insertSpec rExp) m
     m = go (Map.toList specMap) mempty
     go [] m = m
     go (((n,a),f):l) m = go l $ case Map.lookup n m of
-      Nothing -> Map.insert n (Map.singleton a (n ++ "0",f)) m
+      Nothing -> Map.insert n (Map.singleton a (n <> "0",f)) m
       Just sm -> case Map.lookup a sm of
-        Nothing -> Map.adjust (\sm -> Map.insert a (n ++ show (Map.size sm),f) sm) n m
+        Nothing -> Map.adjust (\sm -> Map.insert a (n <> pack (show (Map.size sm)),f) sm) n m
         Just _  -> m
 
 evalPrimFun :: Env -> PrimFun -> Exp
@@ -172,7 +174,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
 
   EVar R n -> e
   EVar C n -> case Map.lookup n env of
-    Nothing -> error $ "missing variable: " ++ n
+    Nothing -> error $ "missing variable: " ++ unpack n
     Just v -> reduce env v
 
   -- check arity and create thunk: env + missing arg count
@@ -220,7 +222,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                     PatLit l a -> PatLit l (reduce env a)
                     PatWildcard a -> PatWildcard (reduce env a)
   ECase C e l -> case reduce env e of
-                  ECon C n vExp -> findPat l $ error $ "no matching pattern for constructor: " ++ n where
+                  ECon C n vExp -> findPat l $ error $ "no matching pattern for constructor: " ++ unpack n where
                     go a [] [] = a
                     go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
