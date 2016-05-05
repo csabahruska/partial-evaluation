@@ -57,19 +57,7 @@ type Env = Map EName Exp
 
 --TODO(improve scoping): addEnv env n x = Map.insertWith (\new old -> error $ "addEnv - name clash: " ++ n ++ " " ++ show (new,old)) n x env
 addEnv env n x = Map.insert n x env
-{-
-stage :: Exp -> Stage
-stage = \case
-  ELit      s _ -> s
-  EPrimFun  s _ -> s
-  EVar      s _ -> s
-  EApp      s _ _ -> s
-  ELam      s _ _ -> s
-  ELet      s _ _ _ -> s
-  EBody     s _ -> s
-  ESpec     {} -> error "stage - ESpec"
-  e -> error $ "stage: " ++ show e
--}
+
 -- HINT: the stack items are reduced expressions
 type SpecW = Writer (Map (EName,[Maybe Exp]) Exp)
 
@@ -145,7 +133,7 @@ evalPrimFun env = \case
 evalThunk (EThunk spec env [] ns vs exp) = foldr mkApp (mkSpecFun $ foldr mkLam rexp ns) vs where
   rexp = case exp of
     EPrimFun C f -> evalPrimFun env f
-    EPrimFun R f -> exp -- evalPrimFun env f
+    EPrimFun R f -> exp
     _ -> reduce env exp
 
   mkSpecFun e = case spec of
@@ -165,9 +153,6 @@ evalThunk e = error $ "evalThunk - expected a thunk, got: " ++ show e
 primThunk :: [EName] -> Exp -> Exp
 primThunk l = EThunk Nothing mempty ns ns [] where ns = [Arg C n | n <- l]
 
---primThunkR :: [EName] -> Exp -> Exp
-primThunkR ns = EThunk Nothing mempty ns ns [] -- where ns = [Arg R n | n <- l]
-
 reduce :: Env -> Exp -> Exp
 reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> e
@@ -179,10 +164,6 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   EPrimFun R PAdd -> primThunk ["x","y"] e
   EPrimFun R PMul -> primThunk ["x","y"] e
   EPrimFun R PIfZero -> primThunk ["c","t","e"] e
-
-  --EPrimFun R PAdd -> primThunkR [Arg R "p",Arg C "q"] e
-  --EPrimFun R PAdd -> primThunk ["p","q"] e
-  --EPrimFun R _ -> e
 
   EVar R n -> e
   EVar C n -> case Map.lookup n env of
@@ -205,21 +186,13 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                     | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show e
                     | otherwise -> evalThunk $ case s of
                                     C -> EThunk spec (Map.insert n a' tenv) ns args ((Arg C a'):apps) b
-                                    R -> EThunk spec {-tenv-}(Map.insert n a' tenv) ns args ((Arg R a'):apps) b
---                  x@(EPrimFun R _) -> EApp s x a'
---                  x@(EApp{}) -> x
+                                    R -> EThunk spec (Map.insert n a' tenv) ns args ((Arg R a'):apps) b
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
   ELet C n a b ->
     case arity > 0 && needSpec of
-      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b -- TODO: add fun name to thunk to generate ESpecFun at eval
-{-
-      True  -> ESpecLet n $ reduce (addEnv env n a') b where -- TODO: add fun name to thunk to generate ESpecFun at eval
-                a' = case reduce env a of
-                  EThunk Nothing tenv ns args apps b -> EThunk (Just (n,arity)) tenv ns args apps b
-                  x -> error $ "ELet C - expected a thunk without spec, got: " ++ show x
--}
+      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b -- add fun name to thunk to generate ESpecFun at eval
       False -> reduce (addEnv env n a) b
    where
         go i l x = case x of
@@ -231,10 +204,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
         needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
 
   -- inserted by ELet C
-  -- TODO: remove this instead use thunk to mark specialization
-  --ESpec n i e -> ESpecFun n args (reduce env e) where args = [if stage a == C then Just a else Nothing | a <- take i []] -- TODO
-
-  ESpec n i b -> case reduce env b of --ESpec n i $ reduce env b
+  ESpec n i b -> case reduce env b of
                   EThunk Nothing tenv ns args apps b -> EThunk (Just (n,i)) tenv ns args apps b
                   x -> error $ "ESpec - expected a thunk without spec, got: " ++ show x
 
