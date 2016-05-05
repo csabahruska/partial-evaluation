@@ -2,7 +2,7 @@ done - manually annotated binding time + reducer => outputs the residual program
 done - parse data constructors
 done - parse case and patterns
 done - remove stack from reducer
-- add back App R and Lam R (ok tests)
+done - add back App R and Lam R (ok tests)
 - literal support in patterns
 - wildcard support in patterns
 - zip/unzip test
