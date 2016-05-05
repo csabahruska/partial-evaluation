@@ -33,7 +33,11 @@ data Exp
   | ECase     Exp [Pat]
   deriving (Show,Eq,Ord)
 
-data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
+data Pat
+  = PatCon      ConName [EName] Exp
+  | PatLit      Lit Exp
+  | PatWildcard Exp
+  deriving (Show,Eq,Ord)
 
 data TypedExp
   = TELit     Ty Lit

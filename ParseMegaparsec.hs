@@ -69,7 +69,10 @@ caseof = uncurry ECase <$> L.indentBlock sc (do
   return (L.IndentSome Nothing (return . (e,)) pat))
 
 pat :: Parser Pat
-pat = Pat <$> con <*> many var <* op "->" <*> expr
+pat =
+  PatCon <$> con <*> many var <* op "->" <*> expr <|>
+  PatLit <$> lit <* op "->" <*> expr <|>
+  PatWildcard <$ op "_" <* op "->" <*> expr
 
 expr :: Parser Exp
 expr = lam <|> try letin <|> try caseof <|> constr <|> formula

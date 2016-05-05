@@ -83,10 +83,10 @@ powerExpR' = powerFunR' $ EApp R (EApp C (EVar C "power") lit1) lit2
 powerExpR1 = powerFunR $ EApp C (EApp R (EVar C "power") lit2) lit2
 
 -------- pattern match test
-case0 = ELet C "x" (ECon C "Just" [lit2]) $ ECase C (EVar C "x") [Pat "Just" ["a"] (EVar C "a")]
-case1 = ELet R "x" (ECon R "Just" [lit2]) $ ECase R (EVar R "x") [Pat "Just" ["a"] (EVar R "a")]
+case0 = ELet C "x" (ECon C "Just" [lit2]) $ ECase C (EVar C "x") [PatCon "Just" ["a"] (EVar C "a")]
+case1 = ELet R "x" (ECon R "Just" [lit2]) $ ECase R (EVar R "x") [PatCon "Just" ["a"] (EVar R "a")]
 resultCase0 = ELit C (LFloat 2.0)
-resultCase1 = ELet R "x" (ECon R "Just" [ELit C (LFloat 2.0)]) (ECase R (EVar R "x") [Pat "Just" ["a"] (EVar R "a")])
+resultCase1 = ELet R "x" (ECon R "Just" [ELit C (LFloat 2.0)]) (ECase R (EVar R "x") [PatCon "Just" ["a"] (EVar R "a")])
 
 
 test = runReduce reduceLamId
@@ -158,14 +158,14 @@ ok = mapM_ (\(a,b) -> putStrLn $ show (a == b) ++ " - " ++ show b) tests
 higherTest =
        ELet C "map" (ELam C "f" (ELam C "x" (EBody C
                 (ECase C (EVar C "x")
-                  [Pat "Nil" [] (ECon C "Nil" [])
-                  ,Pat "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
+                  [PatCon "Nil" [] (ECon C "Nil" [])
+                  ,PatCon "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
                   ]))))
       (ELet C "l" (EBody C (ECon C "Cons" [ELit C (LFloat 1.0),ECon C "Cons" [ELit C (LFloat 2.0),ECon C "Cons" [ELit C (LFloat 3.0),ECon C "Nil" []]]]))
       (ELet C "go" (ELam C "z" (EBody C
                 (ECase C (EVar C "z")
-                  [Pat "Nil" [] (ELit C (LFloat 0.0))
-                  ,Pat "Cons" ["b","bs"] (EApp C (EApp C (EPrimFun C PAdd) (EVar C "b")) (EApp C (EVar C "go") (EVar C "bs")))])))
+                  [PatCon "Nil" [] (ELit C (LFloat 0.0))
+                  ,PatCon "Cons" ["b","bs"] (EApp C (EApp C (EPrimFun C PAdd) (EVar C "b")) (EApp C (EVar C "go") (EVar C "bs")))])))
       (ELet C "five" (ELam C "y" (EBody C
                 (EApp C (EApp C (EPrimFun C PMul) (ELit C (LFloat 5.0))) (EVar C "y"))))
 
@@ -174,8 +174,8 @@ higherTest =
 mapTest =
   ELet C "map" (ELam C "f" (ELam C "x" (EBody C
             (ECase C (EVar C "x")
-              [Pat "Nil" [] (ECon C "Nil" [])
-              ,Pat "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
+              [PatCon "Nil" [] (ECon C "Nil" [])
+              ,PatCon "Cons" ["a","xs"] (ECon C "Cons" [EApp C (EVar C "f") (EVar C "a"),EApp C (EApp C (EVar C "map") (EVar C "f")) (EVar C "xs")])
               ]))))
   (ELet C "five" (ELam C "y" (EBody C
             (EApp C (EApp C (EPrimFun C PMul) (ELit C (LFloat 5.0))) (EVar C "y"))))

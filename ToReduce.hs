@@ -35,5 +35,8 @@ toExp' = \case
   C.ECase    e l -> ECase C (toExp' e) (map toPat' l)
 
 toPat' :: C.Pat -> Pat
-toPat' (C.Pat n l e) = Pat n l (toExp' e)
+toPat' = \case
+  C.PatCon n l e -> PatCon n l (toExp' e)
+  C.PatLit l e -> PatLit (toLit l) (toExp' e)
+  C.PatWildcard e -> PatWildcard (toExp' e)
 

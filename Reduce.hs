@@ -51,7 +51,11 @@ data Exp
 
 data Arg a = Arg Stage a deriving (Show,Eq,Ord)
 
-data Pat = Pat ConName [EName] Exp deriving (Show,Eq,Ord)
+data Pat
+  = PatCon      ConName [EName] Exp
+  | PatLit      Lit Exp
+  | PatWildcard Exp
+  deriving (Show,Eq,Ord)
 
 type Env = Map EName Exp
 
@@ -74,8 +78,13 @@ collectSpec x = case x of
   EPrimFun  {} -> return x
   EVar      {} -> return x
   ECon      s n l -> ECon s n <$> mapM collectSpec l
-  ECase     R a l -> ECase R <$> collectSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> collectSpec b) l
+  ECase     R a l -> ECase R <$> collectSpec a <*> mapM (traversePat collectSpec) l
   e -> error $ "collectSpec: " ++ show e
+
+traversePat f = \case
+  PatCon pn vl b -> PatCon pn vl <$> f b
+  PatLit l b -> PatLit l <$> f b
+  PatWildcard b -> PatWildcard <$> f b
 
 type SpecR = Reader (Map EName (Map [Maybe Exp] (EName,Exp)))
 
@@ -104,7 +113,7 @@ insertSpec x = case x of
   EPrimFun  {} -> return x
   EVar      {} -> return x
   ECon      s n l -> ECon s n <$> mapM insertSpec l
-  ECase     R a l -> ECase R <$> insertSpec a <*> mapM (\(Pat pn vl b) -> Pat pn vl <$> insertSpec b) l
+  ECase     R a l -> ECase R <$> insertSpec a <*> mapM (traversePat insertSpec) l
   e -> error $ "insertSpec: " ++ show e
 
 runReduce :: Exp -> Exp
@@ -205,15 +214,27 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
   ECon s n l -> ECon s n (map (reduce env) l)
 
-  ECase R e l -> ECase R (reduce env e) [Pat n v (reduce env a) | Pat n v a <- l]
+  ECase R e l -> ECase R (reduce env e) (map reducePat l) where
+                  reducePat = \case
+                    PatCon n v a -> PatCon n v (reduce env a)
+                    PatLit l a -> PatLit l (reduce env a)
+                    PatWildcard a -> PatWildcard (reduce env a)
   ECase C e l -> case reduce env e of
-                  ECon C n vExp -> p where
+                  ECon C n vExp -> findPat l $ error $ "no matching pattern for constructor: " ++ n where
                     go a [] [] = a
                     go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
-                    p = case find (\(Pat pn _ _) -> n == pn) l of
-                          Nothing -> error $ "no matching pattern for constructor: " ++ n
-                          Just (Pat _ vNames body) -> reduce (go env vNames vExp) body
+                    findPat [] defPat = defPat
+                    findPat (x:xs) defPat = case x of
+                      PatCon pn vNames body | n == pn -> reduce (go env vNames vExp) body
+                      PatWildcard body -> findPat xs $ reduce env body
+                      _ -> findPat xs defPat
+                  ELit C v -> findPat l $ error $ "no matching pattern for literal: " ++ show v where
+                    findPat [] defPat = defPat
+                    findPat (x:xs) defPat = case x of
+                      PatLit pv body | v == pv -> reduce env body
+                      PatWildcard body -> findPat xs $ reduce env body
+                      _ -> findPat xs defPat
                   x -> error $ "invalid case expression: " ++ show x
 
   EThunk{} -> evalThunk e

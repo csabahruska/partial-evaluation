@@ -5,8 +5,8 @@ done - remove stack from reducer
 done - add back App R and Lam R (ok tests)
 done - tests for thunk app/lam reapplication order
 done - tests for function specialization: arity + arg order
-- literal support in patterns
-- wildcard support in patterns
+done - literal support in patterns
+done - wildcard support in patterns
 - zip/unzip test
 - parse type annotations
 - switch to stage inference from type inference
