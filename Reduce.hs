@@ -164,6 +164,9 @@ evalThunk e = error $ "evalThunk - expected a thunk, got: " ++ show e
 primThunk :: [EName] -> Exp -> Exp
 primThunk l = EThunk Nothing mempty ns ns [] where ns = [Arg C n | n <- l]
 
+valThunk :: Env -> Exp -> Exp
+valThunk env = EThunk Nothing env mempty mempty mempty
+
 reduce :: Env -> Exp -> Exp
 reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ELit {} -> {-# SCC elit #-} e
@@ -191,7 +194,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                 case reduce env f of
                   EThunk spec tenv names@((Arg s' n):ns) args apps b
                     | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show (e,names) -- TODO
-                    | otherwise -> evalThunk $ EThunk spec (Map.insert n a' tenv) ns args ((Arg s a'):apps) b
+                    | otherwise -> evalThunk $ EThunk spec (addEnv tenv n a') ns args ((Arg s a'):apps) b
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
@@ -214,8 +217,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                   x -> error $ "ESpec - expected a thunk without spec, got: " ++ show x
 
   -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
-  --ECon s n l -> {-# SCC econ #-} ECon s n (map (reduce env) l)
-  ECon s n l -> {-# SCC econ #-} ECon s n (map (EThunk Nothing env mempty mempty mempty) l)
+  ECon s n l -> {-# SCC econ #-} ECon s n (map (valThunk env) l)
 
   ECase R e l -> ECase R (reduce env e) (map reducePat l) where
                   reducePat = \case
@@ -225,7 +227,7 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
   ECase C e l -> {-# SCC ecase #-} case reduce env e of
                   ECon C n vExp -> findPat l $ error $ "no matching pattern for constructor: " ++ unpack n where
                     go a [] [] = a
-                    go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
+                    go a (x:xs) (y:ys) = go (addEnv a x y) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
                     findPat [] defPat = defPat
                     findPat (x:xs) defPat = case x of
