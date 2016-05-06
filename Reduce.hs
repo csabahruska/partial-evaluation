@@ -214,8 +214,8 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                   x -> error $ "ESpec - expected a thunk without spec, got: " ++ show x
 
   -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
-  ECon s n l -> {-# SCC econ #-} ECon s n (map (reduce env) l)
-  --ECon s n l -> {-# SCC econ #-} ECon s n (map (EThunk Nothing env mempty mempty mempty) l)
+  --ECon s n l -> {-# SCC econ #-} ECon s n (map (reduce env) l)
+  ECon s n l -> {-# SCC econ #-} ECon s n (map (EThunk Nothing env mempty mempty mempty) l)
 
   ECase R e l -> ECase R (reduce env e) (map reducePat l) where
                   reducePat = \case
