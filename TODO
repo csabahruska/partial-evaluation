@@ -18,6 +18,7 @@ benchmark:
   ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
 
 csaba reduce
+  with ECon sharing loss:
   100  - real 0m0.025s
   500  - real 0m0.328s
   800  - real 0m0.696s
@@ -27,5 +28,17 @@ csaba reduce
   1400 - real 0m2.545s
   1500 - real 0m3.848s
 
+
+  benchmark01.lc
+  10000 - real  0m0.874s
+  20000 - real  0m1.567s
+  30000 - real  0m3.066s
+  40000 - real  0m4.429s
+  50000 - real  0m6.262s
+  60000 - real  0m8.395s
+  70000 - real  0m9.678s
+  80000 - real  0m13.260s
+  90000 - real  0m15.968s
+ 100000 - real  0m17.603s
 
 profiling benchmark and improvements
