@@ -7,7 +7,13 @@ done - tests for thunk app/lam reapplication order
 done - tests for function specialization: arity + arg order
 done - literal support in patterns
 done - wildcard support in patterns
-- zip/unzip test
+done - zip/unzip test
+- pair and list parsing
 - parse type annotations
 - switch to stage inference from type inference
 - reduce open R terms
+
+benchmark:
+  ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
+
+profiling benchmark and improvements
