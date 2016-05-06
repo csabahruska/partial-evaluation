@@ -8,7 +8,7 @@ done - tests for function specialization: arity + arg order
 done - literal support in patterns
 done - wildcard support in patterns
 done - zip/unzip test
-- evaluate remaining thunks after reduction
+done - evaluate remaining thunks after reduction
 - pair and list parsing
 - parse type annotations
 - switch to stage inference from type inference
@@ -16,6 +16,21 @@ done - zip/unzip test
 
 benchmark:
   ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
+
+  program: sum [0..100000]
+  csaba reduce  - real 0m4.214s
+  peti reduce   - real 0m0.251s
+  ghc           - real 0m0.113s
+  jhc           - real 0m0.058s
+  grin original - 
+  grin opt      - 
+
+  1000000:
+    peti reduce - real  0m2.241s
+    ghc         - real  0m0.066s
+  2000000:
+    peti  - real  0m4.488s
+    ghc   - real  0m0.134s
 
 csaba reduce
   with ECon sharing loss:
