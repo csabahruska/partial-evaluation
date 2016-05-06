@@ -81,6 +81,7 @@ collectSpec x = case x of
   EVar      {} -> return x
   ECon      s n l -> ECon s n <$> mapM collectSpec l
   ECase     R a l -> ECase R <$> collectSpec a <*> mapM (traversePat collectSpec) l
+  EThunk    _ _ [] _ _ _ -> collectSpec $ evalThunk x
   e -> error $ "collectSpec: " ++ show e
 
 traversePat f = \case
@@ -121,8 +122,7 @@ insertSpec x = case x of
 runReduce :: Exp -> Exp
 runReduce exp = runReader (insertSpec rExp) m
   where
-    rExp = reduce mempty exp
-    specMap = execWriter $ collectSpec rExp
+    (rExp,specMap) = runWriter $ collectSpec $ reduce mempty exp
     m = go (Map.toList specMap) mempty
     go [] m = m
     go (((n,a),f):l) m = go l $ case Map.lookup n m of
