@@ -16,4 +16,15 @@ done - zip/unzip test
 benchmark:
   ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
 
+csaba reduce
+  100  - real 0m0.025s
+  500  - real 0m0.328s
+  800  - real 0m0.696s
+  1000 - real 0m1.244s
+  1100 - real 0m2.043s
+  1300 - real 0m2.357s
+  1400 - real 0m2.545s
+  1500 - real 0m3.848s
+
+
 profiling benchmark and improvements

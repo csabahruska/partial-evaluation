@@ -1,4 +1,5 @@
 let
+    {-
     map f x = case x of
                 Nil -> Nil
                 Cons a xs -> Cons (f a) (map f xs)
@@ -8,11 +9,12 @@ let
             Nil -> 0
             Cons b bs -> add b (go bs)
     five y = mul 5 y
+    -}
     fromto0 v = case v of
                   0 -> Nil
                   _ -> Cons v (fromto0 (add v (-1.0)))
-    k = fromto0 1000
-
+    k = fromto0 1501
+    {-
     zip a b = case a of
                 Nil -> Nil
                 Cons av al -> case b of
@@ -24,4 +26,10 @@ let
                 Cons av al -> case av of
                                 Pair v1 v2 -> case unzip al of
                                                 Pair v1l v2l -> Pair (Cons v1 v1l) (Cons v2 v2l)
-in unzip (zip k k)--(map (\y -> mul 5 y) k)
+    -}
+    dec v = add v (-1.0)
+    nth i xs = case xs of
+                Cons av al -> case i of
+                                0 -> av
+                                _ -> nth (dec i) al
+in nth 1500 k -- unzip (zip k k)--(map (\y -> mul 5 y) k)

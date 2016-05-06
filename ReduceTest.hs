@@ -1,4 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 module ReduceTest where
+
+import Data.Text (Text,pack,unpack)
 
 import Reduce
 
