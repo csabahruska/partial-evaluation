@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
+-- {-# LANGUAGE OverloadedStrings #-}
 
 module Reduce where
 
@@ -13,15 +13,18 @@ import qualified Data.Map as Map
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Data.Foldable (foldrM,find)
-import Data.Text (Text,pack,unpack)
+-- import Data.Text (Text,pack,unpack)
 
-type EName = Text
-type ConName = Text
+pack = id
+unpack = id
+
+type EName = String --Text
+type ConName = String --Text
 
 data Stage = R | C deriving (Show,Eq,Ord)
 
 data Lit
-  = LFloat !Float
+  = LFloat Float
   deriving (Show,Eq,Ord)
 
 data PrimFun
@@ -31,31 +34,31 @@ data PrimFun
   deriving (Show,Eq,Ord)
 
 data Exp
-  = ELit      Stage !Lit
+  = ELit      Stage Lit
   | EPrimFun  Stage PrimFun
-  | EVar      Stage !EName
+  | EVar      Stage EName
   | EApp      Stage Exp Exp
-  | ELam      Stage !EName Exp
-  | ELet      Stage !EName Exp Exp
+  | ELam      Stage EName Exp
+  | ELet      Stage EName Exp Exp
   -- specialization
   | EBody     Stage Exp
   -- inserted during reduction
-  | ESpec     !EName !Int Exp
-  | ESpecLet  !EName Exp
-  | ESpecFun  !EName [Maybe Exp] Exp -- original name, spec args, spec function
+  | ESpec     EName Int Exp
+  | ESpecLet  EName Exp
+  | ESpecFun  EName [Maybe Exp] Exp -- original name, spec args, spec function
   -- pattern match
-  | ECon      Stage !ConName [Exp]
+  | ECon      Stage ConName [Exp]
   | ECase     Stage Exp [Pat]
   -- partial app
   | EThunk    (Maybe (EName,Int)) Env [Arg EName] [Arg EName] [Arg Exp] Exp -- function specialization info (name + arity till RHS)
                                                                             -- env, missing args, all arg names, applied args, body
   deriving (Show,Eq,Ord)
 
-data Arg a = Arg Stage !a deriving (Show,Eq,Ord)
+data Arg a = Arg Stage a deriving (Show,Eq,Ord)
 
 data Pat
-  = PatCon      !ConName [EName] Exp
-  | PatLit      !Lit Exp
+  = PatCon      ConName [EName] Exp
+  | PatLit      Lit Exp
   | PatWildcard Exp
   deriving (Show,Eq,Ord)
 
