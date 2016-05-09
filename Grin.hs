@@ -170,6 +170,22 @@ reduce e = evalState (runReaderT (evalExp mempty e) mempty) mempty
 {-
 TODO:
   done - execute GRIN (reduction)
+  - simple example: sum upto
+  - optimised example: sum upto
+  - fast ST monad based interpreter
+  - heap points to analysis
+  - implement simplification transformations
+      -- phase 1
+      inlining calls to eval
+      inlining calls to apply
+      -- phase 2
+      specialize update specialisation
+      vectorisation
+      case simplification
+      -- phase 3
+      split fetch operations
+      right hoist fetch operations
+      register introduction
   compile to GRIN
     - lambda lifting
     - generate eval

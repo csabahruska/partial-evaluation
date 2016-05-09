@@ -244,18 +244,3 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
 
   EThunk{} -> {-# SCC ethunk #-} evalThunk e
   _ -> error $ "can not reduce: " ++ ppShow e
-
-{-
-  pattern match:
-    case x of
-      Tag a b c ... -- Contructor Tag + variables
-  -- evaluation of a constructor alternative is like in Lam + App
-
-  example:
-    data Maybe a = Nothing | Just a
-
-    let x = Just 1
-    in case x of
-        Nothing -> 0
-        Just i  -> i
--}

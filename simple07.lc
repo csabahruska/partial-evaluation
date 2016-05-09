@@ -13,7 +13,7 @@ let
     fromto0 v = case v of
                   0 -> Nil
                   _ -> Cons v (fromto0 (add v (-1.0)))
-    k = fromto0 1501
+    k = fromto0 5001
     {-
     zip a b = case a of
                 Nil -> Nil
@@ -32,4 +32,4 @@ let
                 Cons av al -> case i of
                                 0 -> av
                                 _ -> nth (dec i) al
-in nth 1500 k -- unzip (zip k k)--(map (\y -> mul 5 y) k)
+in nth 5000 k -- unzip (zip k k)--(map (\y -> mul 5 y) k)
