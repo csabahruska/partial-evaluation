@@ -1,0 +1,39 @@
+let
+    map f x = case x of
+                Nil -> Nil
+                Cons a xs -> Cons (f a) (map f xs)
+
+    {-
+    l = Cons 1 (Cons 2 (Cons 3 Nil))
+    go z = case z of
+            Nil -> 0
+            Cons b bs -> add b (go bs)
+    five y = mul 5 y
+    -}
+    fromto0 v = case v of
+                  0 -> Nil
+                  _ -> Cons v (fromto0 (add v (-1.0)))
+    k = fromto0 5001
+    
+    zip a b = case a of
+                Nil -> Nil
+                Cons av al -> case b of
+                                Nil -> Nil
+                                Cons bv bl -> Cons (Pair av bv) (zip al bl)
+
+    unzip a = case a of
+                Nil -> Pair Nil Nil
+                Cons av al -> case av of
+                                Pair v1 v2 -> case unzip al of
+                                                Pair v1l v2l -> Pair (Cons v1 v1l) (Cons v2 v2l)
+    
+    dec v = add v (-1.0)
+    nth i xs = case xs of
+                Cons av al -> case i of
+                                0 -> av
+                                _ -> nth (dec i) al
+
+    vec a = Pair (V4 (dec a) (dec a) (dec a)) (V4 a a a a)
+--in nth 5000 k -- unzip (zip k k)--(map (\y -> mul 5 y) k)
+--             (fetchArrays (unzip (map (\(v, c) -> (V4 (v%x * 0.01) (v%y * 0.01) (v%z * 0.01) 1, c)) indy)))
+in unzip (map vec k)
