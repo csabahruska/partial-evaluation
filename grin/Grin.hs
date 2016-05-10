@@ -13,6 +13,7 @@ type Name = String
 type Prog = Map Name Def
 
 data Def = Def Name [Name] Exp
+  deriving Show
 
 data Exp
   = Bind  SimpleExp LPat Exp
