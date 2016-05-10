@@ -67,8 +67,8 @@ ifThenElse i = do
   L.indentGuard sc (i ==)
   kw "else"
   e <- (L.indentGuard sc (i <) >>= expr)
-  return $ Case v [ Alt (NodePat (Tag C "True"  0) []) t
-                  , Alt (NodePat (Tag C "False" 0) []) e
+  return $ Case v [ Alt (TagPat (Tag C "True"  0)) t
+                  , Alt (TagPat (Tag C "False" 0)) e
                   ]
 
 simpleExp = Return <$ kw "return" <*> value <|>
@@ -83,8 +83,9 @@ altPat = parens (NodePat <$> tag <*> many var) <|>
          TagPat <$> tag <|>
          LitPat <$> literal
 
---data Tag = Tag TagType Name Int
-tag = Tag C <$> con <*> pure 0 -- TODO
+tag = Tag C <$ char 'C' <*> con <*> pure 0 <|> -- TODO
+      Tag F <$ char 'F' <*> var <*> pure 0 <|> -- TODO
+      Tag P <$ char 'P' <*> (var <|> con) <*> pure 0 -- TODO
 
 simpleValue = Lit <$> literal <|>
               Var <$> var
@@ -105,3 +106,5 @@ eval fname = do
     Left err -> print err
     Right e  -> do
       print e
+      putStrLn "-------"
+      print $ reduceFun e "main"

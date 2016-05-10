@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 module Grin where
 
+import Debug.Trace
+
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
@@ -81,6 +83,7 @@ bindPat env v p = case p of
               Lit{}     -> Map.insert n v env
               Loc{}     -> Map.insert n v env
               Undefined -> Map.insert n v env
+              _ -> {-trace ("bindPat - illegal value: " ++ show v) $ -}Map.insert n v env
               _ -> error $ "bindPat - illegal value: " ++ show v
   TagNode t l -> case v of
                   TagNode vt vl | vt == t -> bindPatMany env vl l
@@ -121,6 +124,9 @@ evalSimpleExp env = \case
               case n of
                 "add" -> primAdd args
                 "mul" -> primMul args
+                "intPrint" -> primIntPrint args
+                "intGT" -> primIntGT args
+                "intAdd" -> primAdd args
                 _ -> do
                   Def _ vars body <- reader $ Map.findWithDefault (error $ "unknown function: " ++ n) n
                   evalExp (go env vars args) body
@@ -160,6 +166,12 @@ evalExp env = \case
   x -> error $ "evalExp: " ++ show x
 
 -- primitive functions
+primIntGT [Lit (LFloat a), Lit (LFloat b)] = return $ ValTag $ Tag C (if a > b then "True" else "False") 0
+primIntGT x = error $ "primIntGT - invalid arguments: " ++ show x
+
+primIntPrint [Lit (LFloat a)] = return $ Lit $ LFloat $ a
+primIntPrint x = error $ "primIntPrint - invalid arguments: " ++ show x
+
 primAdd [Lit (LFloat a), Lit (LFloat b)] = return $ Lit $ LFloat $ a + b
 primAdd x = error $ "primAdd - invalid arguments: " ++ show x
 
@@ -168,6 +180,14 @@ primMul x = error $ "primMul - invalid arguments: " ++ show x
 
 reduce :: Exp -> Val
 reduce e = evalState (runReaderT (evalExp mempty e) mempty) mempty
+
+reduceFun :: [Def] -> String -> Val
+reduceFun l n = evalState (runReaderT (evalExp mempty e) m) mempty where
+  m = Map.fromList [(n,d) | d@(Def n _ _) <- l]
+  e = case Map.lookup n m of
+        Nothing -> error $ "missing function: " ++ n
+        Just (Def _ [] a) -> a
+        _ -> error $ "function " ++ n ++ " has arguments"
 {-
 TODO:
   done - execute GRIN (reduction)
