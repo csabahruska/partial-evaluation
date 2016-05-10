@@ -30,7 +30,7 @@ data SimpleExp
   | Fetch   Name
 --  | FetchI  Name Int -- fetch node component
   | Update  Name Val
---  | Block   Exp
+  | Block   Exp
   deriving Show
 
 type LPat = Val
@@ -147,7 +147,7 @@ evalSimpleExp env = \case
                             False -> error $ "evalSimpleExp - Update unknown location: " ++ show l
                             True  -> modify' (IntMap.insert l v') >> return Unit
                 x -> error $ "evalSimpleExp - Update expected location, got: " ++ show x
---  | Block   Exp
+  Block a -> evalExp env a
   x -> error $ "evalSimpleExp: " ++ show x
 
 evalExp :: Env -> Exp -> GrinM Val
@@ -181,7 +181,7 @@ primMul x = error $ "primMul - invalid arguments: " ++ show x
 reduce :: Exp -> Val
 reduce e = evalState (runReaderT (evalExp mempty e) mempty) mempty
 
-reduceFun :: [Def] -> String -> Val
+reduceFun :: [Def] -> Name -> Val
 reduceFun l n = evalState (runReaderT (evalExp mempty e) m) mempty where
   m = Map.fromList [(n,d) | d@(Def n _ _) <- l]
   e = case Map.lookup n m of

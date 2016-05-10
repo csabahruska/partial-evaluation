@@ -10,7 +10,7 @@ import qualified Text.Megaparsec.Lexer as L
 import qualified Data.Set as Set
 import Grin
 
-keywords = Set.fromList ["case","of","return","fetch","store","update","if","then","else"]
+keywords = Set.fromList ["case","of","return","fetch","store","update","if","then","else","do"]
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -53,11 +53,11 @@ signedFloat = L.signed sc' float
 def = Def <$> try (L.indentGuard sc (1 ==) *> var) <*> many var <* op "=" <*> (L.indentGuard sc (1 <) >>= expr)
 
 expr i = L.indentGuard sc (i ==) >>
-  (\pat e b -> Bind e pat b) <$> try (value <* op "<-") <*> simpleExp <*> expr i <|>
+  (\pat e b -> Bind e pat b) <$> try (value <* op "<-") <*> simpleExp i <*> expr i <|>
   Case <$ kw "case" <*> value <* kw "of" <*> (L.indentGuard sc (i <) >>= some . alternative) <|>
   ifThenElse i <|>
   try ((\n v e -> Bind (Update n v) Unit e) <$ kw "update" <*> var <*> value <*> expr i) <|>
-  SExp <$> simpleExp
+  SExp <$> simpleExp i
 
 ifThenElse i = do
   kw "if"
@@ -71,11 +71,12 @@ ifThenElse i = do
                   , Alt (TagPat (Tag C "False" 0)) e
                   ]
 
-simpleExp = Return <$ kw "return" <*> value <|>
-            Store <$ kw "store" <*> value <|>
-            Fetch <$ kw "fetch" <*> var <|>
-            Update <$ kw "update" <*> var <*> value <|>
-            App <$> var <*> some simpleValue
+simpleExp i = Return <$ kw "return" <*> value <|>
+              Store <$ kw "store" <*> value <|>
+              Fetch <$ kw "fetch" <*> var <|>
+              Update <$ kw "update" <*> var <*> value <|>
+              Block <$ kw "do" <*> (L.indentGuard sc (i <) >>= expr) <|>
+              App <$> var <*> some simpleValue
 
 alternative i = Alt <$> try (L.indentGuard sc (i ==) *> altPat) <* op "->" <*> (L.indentGuard sc (i <) >>= expr)
 
