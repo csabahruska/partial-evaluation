@@ -191,8 +191,8 @@ reduceFun l n = evalState (runReaderT (evalExp mempty e) m) mempty where
 {-
 TODO:
   done - execute GRIN (reduction)
-  - simple example: sum upto
-  - optimised example: sum upto
+  done - simple example: sum upto
+  done - optimised example: sum upto
   - fast ST monad based interpreter
   - heap points to analysis
   - implement simplification transformations
