@@ -13,6 +13,8 @@ done - evaluate remaining thunks after reduction
 - parse type annotations
 - switch to stage inference from type inference
 - reduce open R terms
+- implement binding-time type system + inference
+- implement fast closed compile term evaluator (as deep EDSL); this method can be used with grin also
 
 benchmark:
   ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
