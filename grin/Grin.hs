@@ -5,8 +5,8 @@ import Debug.Trace
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IntMap
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -66,9 +66,16 @@ data TagType = C | F | P
 data Tag = Tag TagType Name Int
   deriving (Eq,Show)
 
-type Store = IntMap Val
+data StoreMap
+  = StoreMap
+  { storeMap  :: IntMap Val
+  , storeSize :: !Int
+  }
+
+emptyStore = StoreMap mempty 0
+
 type Env = Map Name Val
-type GrinM = ReaderT Prog (State Store)
+type GrinM = ReaderT Prog (State StoreMap)
 
 bindPatMany :: Env -> [Val] -> [LPat] -> Env
 bindPatMany a [] [] = a
@@ -97,8 +104,8 @@ bindPat env v p = case p of
 lookupEnv :: Name -> Env -> Val
 lookupEnv n env = Map.findWithDefault (error $ "missing variable: " ++ n) n env
 
-lookupStore :: Int -> Store -> Val
-lookupStore i s = IntMap.findWithDefault (error $ "missing location: " ++ show i) i s
+lookupStore :: Int -> StoreMap -> Val
+lookupStore i s = IntMap.findWithDefault (error $ "missing location: " ++ show i) i $ storeMap s
 
 evalVal :: Env -> Val -> Val
 evalVal env = \case
@@ -116,7 +123,7 @@ evalVal env = \case
 
 evalSimpleExp :: Env -> SimpleExp -> GrinM Val
 evalSimpleExp env = \case
-  App n a -> do
+  App n a -> {-# SCC eSE_App #-}do
               let args = map (evalVal env) a
                   go a [] [] = a
                   go a (x:xs) (y:ys) = go (Map.insert x y a) xs ys
@@ -130,24 +137,24 @@ evalSimpleExp env = \case
                 _ -> do
                   Def _ vars body <- reader $ Map.findWithDefault (error $ "unknown function: " ++ n) n
                   evalExp (go env vars args) body
-  Return v -> return $ evalVal env v
-  Store v -> do
-              l <- gets IntMap.size
+  Return v -> {-# SCC eSE_Return #-}return $ evalVal env v
+  Store v -> {-# SCC eSE_Store #-}do
+              l <- {-# SCC eSE_Store_size #-}gets storeSize
               let v' = evalVal env v
-              modify' (IntMap.insert l v')
+              modify' ({-# SCC eSE_Store_insert #-}\(StoreMap m s) -> StoreMap (IntMap.insert l v' m) (s+1))
               return $ Loc l
-  Fetch n -> case lookupEnv n env of
+  Fetch n -> {-# SCC eSE_Fetch #-}case lookupEnv n env of
               Loc l -> gets $ lookupStore l
               x -> error $ "evalSimpleExp - Fetch expected location, got: " ++ show x
 --  | FetchI  Name Int -- fetch node component
-  Update n v -> do
+  Update n v -> {-# SCC eSE_Update #-}do
               let v' = evalVal env v
               case lookupEnv n env of
-                Loc l -> get >>= \s -> case IntMap.member l s of
+                Loc l -> get >>= \(StoreMap m _) -> case IntMap.member l m of
                             False -> error $ "evalSimpleExp - Update unknown location: " ++ show l
-                            True  -> modify' (IntMap.insert l v') >> return Unit
+                            True  -> modify' (\(StoreMap m s) -> StoreMap (IntMap.insert l v' m) s) >> return Unit
                 x -> error $ "evalSimpleExp - Update expected location, got: " ++ show x
-  Block a -> evalExp env a
+  Block a -> {-# SCC eSE_Block #-}evalExp env a
   x -> error $ "evalSimpleExp: " ++ show x
 
 evalExp :: Env -> Exp -> GrinM Val
@@ -179,10 +186,10 @@ primMul [Lit (LFloat a), Lit (LFloat b)] = return $ Lit $ LFloat $ a * b
 primMul x = error $ "primMul - invalid arguments: " ++ show x
 
 reduce :: Exp -> Val
-reduce e = evalState (runReaderT (evalExp mempty e) mempty) mempty
+reduce e = evalState (runReaderT (evalExp mempty e) mempty) emptyStore
 
 reduceFun :: [Def] -> Name -> Val
-reduceFun l n = evalState (runReaderT (evalExp mempty e) m) mempty where
+reduceFun l n = evalState (runReaderT (evalExp mempty e) m) emptyStore where
   m = Map.fromList [(n,d) | d@(Def n _ _) <- l]
   e = case Map.lookup n m of
         Nothing -> error $ "missing function: " ++ n
