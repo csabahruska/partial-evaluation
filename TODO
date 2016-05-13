@@ -24,7 +24,7 @@ benchmark:
   grin original; pure - real 0m4.170s memory 437 MB
   grin opt; pure      - real 0m1.061s memory 18 MB
   peti reduce         - real 0m0.251s memory 13 MB
-  ghc                 - real 0m0.113s
+  ghc                 - real 0m0.020s mempry 1 MB
   jhc                 - real 0m0.058s
 
 

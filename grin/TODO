@@ -1,6 +1,8 @@
   done - execute GRIN (reduction)
   done - simple example: sum upto
   done - optimised example: sum upto
+  - compile a simple lazy functional language to GRIN
+  - compile a partial evaluation reduction
   - fast ST monad based interpreter
   - heap points to analysis
   - implement simplification transformations
