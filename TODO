@@ -20,11 +20,12 @@ benchmark:
   ghci, csaba reduce, grin, peti reduce X original, optimized (tail recursion)
 
   program: sum [0..100000]
-  csaba reduce        - real 0m4.214s memory 302 MB
-  grin original; pure - real 0m4.170s memory 437 MB
-  grin opt; pure      - real 0m1.061s memory 18 MB
-  peti reduce         - real 0m0.251s memory 13 MB
-  ghc                 - real 0m0.020s mempry 1 MB
+  lam machine         - real 0m13.127s memory 100 MB
+  csaba reduce        - real 0m4.214s  memory 302 MB
+  grin original; pure - real 0m4.170s  memory 437 MB
+  grin opt; pure      - real 0m1.061s  memory 18 MB
+  peti reduce         - real 0m0.251s  memory 13 MB
+  ghc                 - real 0m0.020s  mempry 1 MB
   jhc                 - real 0m0.058s
 
 
