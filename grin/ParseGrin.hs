@@ -37,7 +37,7 @@ op w = L.symbol sc' w
 
 var :: Parser String
 var = try $ lexeme ((:) <$> lowerChar <*> many (alphaNumChar <|> oneOf "'_")) >>= \x -> case Set.member x keywords of
-  True -> unexpected $ "keyword: " ++ x
+  True -> fail $ "keyword: " ++ x
   False -> return x
 
 con :: Parser String
@@ -51,11 +51,11 @@ signedFloat = L.signed sc' float
 
 -- grin syntax
 
-def = Def <$> try (L.indentGuard sc (1 ==) *> var) <*> many var <* op "=" <*> (L.indentGuard sc (1 <) >>= expr)
+def = Def <$> try (L.indentGuard sc EQ (unsafePos 1) *> var) <*> many var <* op "=" <*> (L.indentGuard sc GT (unsafePos 1) >>= expr)
 
-expr i = L.indentGuard sc (i ==) >>
+expr i = L.indentGuard sc EQ i >>
   (\pat e b -> Bind e pat b) <$> try (value <* op "<-") <*> simpleExp i <*> expr i <|>
-  Case <$ kw "case" <*> value <* kw "of" <*> (L.indentGuard sc (i <) >>= some . alternative) <|>
+  Case <$ kw "case" <*> value <* kw "of" <*> (L.indentGuard sc GT i >>= some . alternative) <|>
   ifThenElse i <|>
   try ((\n v e -> Bind (Update n v) Unit e) <$ kw "update" <*> var <*> value <*> expr i) <|>
   SExp <$> simpleExp i
@@ -64,10 +64,10 @@ ifThenElse i = do
   kw "if"
   v <- value
   kw "then"
-  t <- (L.indentGuard sc (i <) >>= expr)
-  L.indentGuard sc (i ==)
+  t <- (L.indentGuard sc GT i >>= expr)
+  L.indentGuard sc EQ i
   kw "else"
-  e <- (L.indentGuard sc (i <) >>= expr)
+  e <- (L.indentGuard sc GT i >>= expr)
   return $ Case v [ Alt (TagPat (Tag C "True"  0)) t
                   , Alt (TagPat (Tag C "False" 0)) e
                   ]
@@ -76,10 +76,10 @@ simpleExp i = Return <$ kw "return" <*> value <|>
               Store <$ kw "store" <*> value <|>
               Fetch <$ kw "fetch" <*> var <|>
               Update <$ kw "update" <*> var <*> value <|>
-              Block <$ kw "do" <*> (L.indentGuard sc (i <) >>= expr) <|>
+              Block <$ kw "do" <*> (L.indentGuard sc GT i >>= expr) <|>
               App <$> var <*> some simpleValue
 
-alternative i = Alt <$> try (L.indentGuard sc (i ==) *> altPat) <* op "->" <*> (L.indentGuard sc (i <) >>= expr)
+alternative i = Alt <$> try (L.indentGuard sc EQ i *> altPat) <* op "->" <*> (L.indentGuard sc GT i >>= expr)
 
 altPat = parens (NodePat <$> tag <*> many var) <|>
          TagPat <$> tag <|>
@@ -100,6 +100,8 @@ value = Unit <$ op "()" <|>
 
 literal :: Parser Lit
 literal = LFloat . realToFrac <$> try signedFloat <|> LFloat . fromIntegral <$> signedInteger
+
+parseFromFile p file = runParser p file <$> readFile file
 
 eval :: String -> IO ()
 eval fname = do

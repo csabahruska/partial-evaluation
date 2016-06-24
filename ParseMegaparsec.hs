@@ -38,7 +38,7 @@ op w = L.symbol sc' w
 
 var :: Parser String
 var = try $ lexeme ((:) <$> lowerChar <*> many (alphaNumChar)) >>= \x -> case Set.member x keywords of
-  True -> unexpected $ "keyword: " ++ x
+  True -> fail $ "keyword: " ++ x
   False -> return x
 
 con :: Parser String
@@ -59,13 +59,13 @@ letin = do
     i <- L.indentLevel
     kw "let"
     return (L.IndentSome Nothing (return . (i,)) def)
-  L.indentGuard sc (== i)
+  L.indentGuard sc EQ i
   kw "in"
   a <- expr
   return $ foldr ($) a l
 
 def :: Parser (Exp -> Exp)
-def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc (>= i) >> expr
+def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc GT i >> expr
 
 caseof :: Parser Exp
 caseof = uncurry ECase <$> L.indentBlock sc (do
@@ -101,6 +101,8 @@ lam :: Parser Exp
 lam = (\n e -> ELam n e) <$ op "\\" <*> var <* op "->" <*> expr
 
 test' = test "def02.lc"
+
+parseFromFile p file = runParser p file <$> readFile file
 
 test :: String -> IO ()
 test fname = do
