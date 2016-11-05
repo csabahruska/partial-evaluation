@@ -18,7 +18,7 @@ lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
 
 blockComment :: Parser ()
-blockComment = L.skipBlockComment "{-" "-}"
+blockComment = L.skipBlockCommentNested "{-" "-}"
 
 sc :: Parser ()
 sc = L.space (void spaceChar) lineComment blockComment
@@ -65,7 +65,7 @@ letin = do
   return $ foldr ($) a l
 
 def :: Parser (Exp -> Exp)
-def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <* kw "=" <*> do L.indentLevel >>= \i -> L.indentGuard sc GT i >> expr
+def = (\n a d e -> ELet n (foldr ELam (EBody d) a) e) <$> var <*> many var <*> (do L.indentLevel >>= \i -> kw "=" >> L.indentGuard sc GT i >> expr)
 
 caseof :: Parser Exp
 caseof = uncurry ECase <$> L.indentBlock sc (do
@@ -106,7 +106,7 @@ parseFromFile p file = runParser p file <$> readFile file
 
 test :: String -> IO ()
 test fname = do
-  result <- parseFromFile (expr <* sc <* eof) fname
+  result <- parseFromFile (sc *> expr <* sc <* eof) fname
   case result of
     Left err -> print err
     Right e  -> do

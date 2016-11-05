@@ -3,6 +3,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+-- partial evaluator with monochronic binding time
+
 module Reduce where
 
 import Text.Show.Pretty
