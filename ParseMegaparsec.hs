@@ -2,15 +2,18 @@
 
 module ParseMegaparsec where
 
+import Data.Void
 import Control.Applicative (empty)
 import Control.Monad (void)
-import Text.Megaparsec
-import Text.Megaparsec.String
-import qualified Text.Megaparsec.Lexer as L
+import Text.Megaparsec as L
+import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
 import Curry hiding (test)
 import ToReduce
 import qualified Reduce as R
 import qualified Data.Set as Set
+
+type Parser = Parsec Void String
 
 keywords = Set.fromList ["let","in","case","of"]
 
@@ -44,7 +47,7 @@ var = try $ lexeme ((:) <$> lowerChar <*> many (alphaNumChar)) >>= \x -> case Se
 con :: Parser String
 con = lexeme $ (:) <$> upperChar <*> many (alphaNumChar)
 
-integer = lexeme L.integer
+integer = lexeme L.decimal
 signedInteger = L.signed sc' integer
 
 float = lexeme L.float
