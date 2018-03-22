@@ -160,7 +160,7 @@ evalThunk (EThunk spec env [] ns vs exp) = foldr mkApp (mkSpecFun $ foldr mkLam 
   mkLam (Arg R n) x = case exp of
     EPrimFun{} -> x
     _ -> ELam R n x
-evalThunk e@EThunk{} = {-# SCC thunk_bypass #-} e
+evalThunk e@EThunk{} = e
 evalThunk e = error $ "evalThunk - expected a thunk, got: " ++ show e
 
 primThunk :: [EName] -> Exp -> Exp
@@ -171,28 +171,28 @@ valThunk env = EThunk Nothing env mempty mempty mempty
 
 reduce :: Env -> Exp -> Exp
 reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
-  ELit {} -> {-# SCC elit #-} e
+  ELit {} -> e
 
-  EPrimFun _ PAdd -> {-# SCC eprimfun_padd #-} primThunk ["x","y"] e
-  EPrimFun _ PMul -> {-# SCC eprimfun_pmul #-} primThunk ["x","y"] e
-  EPrimFun _ PIfZero -> {-# SCC eprimfun_pifzero #-} primThunk ["c","t","e"] e
+  EPrimFun _ PAdd -> primThunk ["x","y"] e
+  EPrimFun _ PMul -> primThunk ["x","y"] e
+  EPrimFun _ PIfZero -> primThunk ["c","t","e"] e
 
   EVar R n -> e
-  EVar C n -> {-# SCC evar #-} case Map.lookup n env of
+  EVar C n -> case Map.lookup n env of
     Nothing -> error $ "missing variable: " ++ unpack n
     Just v -> reduce env v
 
   -- check arity and create thunk: env + missing arg count
-  ELam{} -> {-# SCC elam #-} go [] e where
+  ELam{} -> go [] e where
         go l x = case x of
           ELam s a x -> go ((Arg s a):l) x
           b -> EThunk Nothing env revl revl [] b where revl = reverse $ {-trace ("\n* EThunk args: " ++ show l)-} l
 
-  EBody C a -> {-# SCC ebody #-} reduce env a
+  EBody C a -> reduce env a
   EBody R a -> EBody R $ reduce env a
 
   -- apply arg to thunk or if it's saturated then cretate a new thunk
-  EApp s f a -> {-# SCC eapp #-} let a' = reduce env a in
+  EApp s f a -> let a' = reduce env a in
                 case reduce env f of
                   EThunk spec tenv names@((Arg s' n):ns) args apps b
                     | False && s /= s' -> error $ "EApp - stage mismatch: " ++ show (e,names) -- TODO
@@ -200,9 +200,9 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
                   x -> error $ "EApp - expected a thunk, got: " ++ show x
 
   ELet R n a b -> ELet R n (reduce env a) (reduce env b)
-  ELet C n a b -> {-# SCC elet_c #-}
+  ELet C n a b ->
     case arity > 0 && needSpec of
-      True  -> {-# SCC elet_spec #-} ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b -- add fun name to thunk to generate ESpecFun at eval
+      True  -> ESpecLet n $ reduce (addEnv env n (ESpec n arity a)) b -- add fun name to thunk to generate ESpecFun at eval
       False -> reduce (addEnv env n a) b
    where
         go i l x = case x of
@@ -214,35 +214,35 @@ reduce env e = {-trace (unlines [show env,show stack,show e,"\n"]) $ -}case e of
         needSpec = not $ null [() | C <- stages] || null [() | R <- stages]
 
   -- inserted by ELet C
-  ESpec n i b -> {-# SCC espec #-} case reduce env b of
+  ESpec n i b -> case reduce env b of
                   EThunk Nothing tenv ns args apps b -> EThunk (Just (n,i)) tenv ns args apps b
                   x -> error $ "ESpec - expected a thunk without spec, got: " ++ show x
 
   -- HINT: we can not eliminate ECon C here, but they should disappear from the residual exp
-  ECon s n l -> {-# SCC econ #-} ECon s n (map (valThunk env) l)
+  ECon s n l -> ECon s n (map (valThunk env) l)
 
   ECase R e l -> ECase R (reduce env e) (map reducePat l) where
                   reducePat = \case
                     PatCon n v a -> PatCon n v (reduce env a)
                     PatLit l a -> PatLit l (reduce env a)
                     PatWildcard a -> PatWildcard (reduce env a)
-  ECase C e l -> {-# SCC ecase #-} case reduce env e of
+  ECase C e l -> case reduce env e of
                   ECon C n vExp -> findPat l $ error $ "no matching pattern for constructor: " ++ unpack n where
                     go a [] [] = a
                     go a (x:xs) (y:ys) = go (addEnv a x y) xs ys
                     go _ x y = error $ "invalid pattern and constructor: " ++ show (n,x,y)
                     findPat [] defPat = defPat
                     findPat (x:xs) defPat = case x of
-                      PatCon pn vNames body | n == pn -> {-# SCC ecase_patcon #-} reduce (go env vNames vExp) body
+                      PatCon pn vNames body | n == pn -> reduce (go env vNames vExp) body
                       PatWildcard body -> findPat xs $ reduce env body
                       _ -> findPat xs defPat
                   ELit C v -> findPat l $ error $ "no matching pattern for literal: " ++ show v where
                     findPat [] defPat = defPat
                     findPat (x:xs) defPat = case x of
-                      PatLit pv body | v == pv -> {-# SCC ecase_patlit #-} reduce env body
+                      PatLit pv body | v == pv -> reduce env body
                       PatWildcard body -> findPat xs $ reduce env body
                       _ -> findPat xs defPat
                   x -> error $ "invalid case expression: " ++ show x
 
-  EThunk{} -> {-# SCC ethunk #-} evalThunk e
+  EThunk{} -> evalThunk e
   _ -> error $ "can not reduce: " ++ ppShow e
