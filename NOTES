@@ -1,0 +1,5 @@
+What is the complexity difference of doing binding time analysis/inference
+  on a first order language (e.g. GRIN)
+  and a higher order language (e.g. Haskell)?
+
+IDEA: Implement a minimalist sample language for both.
